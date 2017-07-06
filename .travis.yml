@@ -10,4 +10,4 @@ scala:
 jdk:
    - oraclejdk8
 script:
-  - sbt clean compile
+  - sbt clean coverage test coverageReport
