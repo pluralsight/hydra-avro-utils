@@ -1,0 +1,13 @@
+language: scala
+sudo: required
+dist: trusty
+env:
+  global:
+    - _JAVA_OPTIONS="-Dakka.test.timefactor=3"
+scala:
+   - 2.11.8
+   - 2.12.1
+jdk:
+   - oraclejdk8
+script:
+  - sbt clean compile
