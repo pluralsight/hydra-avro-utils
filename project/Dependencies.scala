@@ -9,8 +9,6 @@ object Dependencies {
   val kxbmapConfigVersion = "0.4.4"
   val typesafeConfigVersion = "1.3.0"
   val avroVersion = "1.8.1"
-  val jodaTimeVersion = "2.9.3"
-  val jodaConvertVersion = "1.8.1"
   val confluentVersion = "3.2.1"
   val kafkaVersion = "0.10.2.0"
   val scalazVersion = "7.2.9"
@@ -48,10 +46,6 @@ object Dependencies {
 
     val springCore = "org.springframework" % "spring-core" % springVersion
 
-    val joda = Seq(
-      "joda-time" % "joda-time" % jodaTimeVersion,
-      "org.joda" % "joda-convert" % jodaConvertVersion)
-
     val jackson = Seq(
       "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion
@@ -73,6 +67,6 @@ object Dependencies {
 
   val coreDeps = baseDeps ++ Seq(guavacache) ++ confluent ++ kafka
 
-  val overrides = Set(log4J, typesafeConfig, joda)
+  val overrides = Set(log4J, typesafeConfig)
 }
 
