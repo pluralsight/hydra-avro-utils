@@ -1,4 +1,4 @@
-package hydra.avro.serde.jdbc
+package hydra.avro.sql
 
 import org.scalatest.{FunSpecLike, Matchers}
 
@@ -6,7 +6,6 @@ import org.scalatest.{FunSpecLike, Matchers}
   * Created by alexsilva on 5/4/17.
   */
 class NoOpDIalectSpec extends Matchers with FunSpecLike {
-
 
   describe("The NoOp dialect") {
     it("handles everything") {

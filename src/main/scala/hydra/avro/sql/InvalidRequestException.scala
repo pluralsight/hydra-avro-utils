@@ -1,0 +1,6 @@
+package hydra.avro.sql
+
+/**
+  * Created by alexsilva on 7/11/17.
+  */
+case class InvalidSchemaException(msg:String) extends RuntimeException(msg)

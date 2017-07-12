@@ -29,7 +29,7 @@ class ConfluentSchemaRegistrySpec extends Matchers with FunSpecLike {
       val c = new ConfluentSchemaRegistry {
         override lazy val config: Config = ConfigFactory.parseString("schema.registry.url=mock")
       }
-      c.registry shouldBe a[MockSchemaRegistryClient]
+      c.registryClient shouldBe a[MockSchemaRegistryClient]
       c.registryUrl shouldBe "mock"
     }
 
@@ -44,6 +44,12 @@ class ConfluentSchemaRegistrySpec extends Matchers with FunSpecLike {
       val config = ConfigFactory.parseString("schema.registry.url=\"http://localhost:9092\"")
       ConfluentSchemaRegistry.fromConfig(config) shouldBe a[CachedSchemaRegistryClient]
       ConfluentSchemaRegistry.registryUrl(config) shouldBe "http://localhost:9092"
+    }
+
+    it("can be wrapped") {
+      val c = new ConfluentSchemaRegistryWrapper(ConfigFactory.parseString("schema.registry.url=mock"))
+      c.registryClient shouldBe a[MockSchemaRegistryClient]
+      c.registryUrl shouldBe "mock"
     }
   }
 

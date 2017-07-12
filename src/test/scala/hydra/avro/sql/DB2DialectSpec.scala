@@ -1,6 +1,7 @@
-package hydra.avro.serde.jdbc
+package hydra.avro.sql
 
-import java.sql.Types._
+
+import java.sql.JDBCType._
 
 import org.apache.avro.Schema
 import org.scalatest.{FunSpecLike, Matchers}
@@ -8,7 +9,7 @@ import org.scalatest.{FunSpecLike, Matchers}
 /**
   * Created by alexsilva on 5/4/17.
   */
-class PostgresDialectSpec extends Matchers with FunSpecLike {
+class DB2DialectSpec extends Matchers with FunSpecLike {
   val schema =
     """
       |{
@@ -84,26 +85,24 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
     """.stripMargin
 
 
-  describe("The postgres dialect") {
+  describe("The DB2 dialect") {
     it("converts a schema") {
       val avro = new Schema.Parser().parse(schema)
-      PostgresDialect.getJDBCType(avro.getField("username").schema()).get shouldBe JdbcType("TEXT", CHAR)
-      intercept[IllegalArgumentException] {
-        PostgresDialect.getJDBCType(avro.getField("passwordHash").schema()).get shouldBe JdbcType("BYTEA", BINARY)
-      }
-      PostgresDialect.getJDBCType(avro.getField("rate").schema()) shouldBe Some(JdbcType("DECIMAL(4,2)", DECIMAL))
-      PostgresDialect.getJDBCType(avro.getField("active").schema()) shouldBe Some(JdbcType("BOOLEAN", BOOLEAN))
-      PostgresDialect.getJDBCType(avro.getField("score").schema()) shouldBe Some(JdbcType("FLOAT4", FLOAT))
-      PostgresDialect.getJDBCType(avro.getField("scored").schema()) shouldBe Some(JdbcType("FLOAT8", DOUBLE))
-      PostgresDialect.getJDBCType(avro.getField("testUnion").schema()) shouldBe Some(JdbcType("TEXT", CHAR))
-      PostgresDialect.getJDBCType(avro.getField("friends").schema()) shouldBe Some(JdbcType("TEXT[]", ARRAY))
-      PostgresDialect.getJDBCType(avro.getField("signupDate").schema()) shouldBe None
+      DB2Dialect.getJDBCType(avro.getField("username").schema()).get shouldBe JdbcType("CLOB", CLOB)
+      DB2Dialect.getJDBCType(avro.getField("passwordHash").schema()) shouldBe None
+      DB2Dialect.getJDBCType(avro.getField("rate").schema()) shouldBe None
+      DB2Dialect.getJDBCType(avro.getField("active").schema()) shouldBe Some(JdbcType("CHAR(1)", CHAR))
+      DB2Dialect.getJDBCType(avro.getField("score").schema()) shouldBe None
+      DB2Dialect.getJDBCType(avro.getField("scored").schema()) shouldBe None
+      DB2Dialect.getJDBCType(avro.getField("testUnion").schema()) shouldBe None
+      DB2Dialect.getJDBCType(avro.getField("friends").schema()) shouldBe None
+      DB2Dialect.getJDBCType(avro.getField("signupDate").schema()) shouldBe None
     }
 
     it("works with general sql commands") {
-      PostgresDialect.getTableExistsQuery("table") shouldBe "SELECT 1 FROM table LIMIT 1"
+      DB2Dialect.getTableExistsQuery("table") shouldBe "SELECT * FROM table WHERE 1=0"
 
-      PostgresDialect.getSchemaQuery("table") shouldBe "SELECT * FROM table WHERE 1=0"
+      DB2Dialect.getSchemaQuery("table") shouldBe "SELECT * FROM table WHERE 1=0"
     }
   }
 }

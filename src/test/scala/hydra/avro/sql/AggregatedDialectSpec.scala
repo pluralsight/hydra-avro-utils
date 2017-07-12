@@ -1,6 +1,6 @@
-package hydra.avro.serde.jdbc
+package hydra.avro.sql
 
-import java.sql.Types._
+import java.sql.JDBCType._
 
 import org.apache.avro.Schema
 import org.scalatest.{FunSpecLike, Matchers}
@@ -8,7 +8,7 @@ import org.scalatest.{FunSpecLike, Matchers}
 /**
   * Created by alexsilva on 5/4/17.
   */
-class DB2DialectSpec extends Matchers with FunSpecLike {
+class AggregatedDialectSpec extends Matchers with FunSpecLike {
   val schema =
     """
       |{
@@ -84,24 +84,27 @@ class DB2DialectSpec extends Matchers with FunSpecLike {
     """.stripMargin
 
 
-  describe("The DB2 dialect") {
-    it("converts a schema") {
-      val avro = new Schema.Parser().parse(schema)
-      DB2Dialect.getJDBCType(avro.getField("username").schema()).get shouldBe JdbcType("CLOB", CLOB)
-      DB2Dialect.getJDBCType(avro.getField("passwordHash").schema()) shouldBe None
-      DB2Dialect.getJDBCType(avro.getField("rate").schema()) shouldBe None
-      DB2Dialect.getJDBCType(avro.getField("active").schema()) shouldBe Some(JdbcType("CHAR(1)", CHAR))
-      DB2Dialect.getJDBCType(avro.getField("score").schema()) shouldBe None
-      DB2Dialect.getJDBCType(avro.getField("scored").schema()) shouldBe None
-      DB2Dialect.getJDBCType(avro.getField("testUnion").schema()) shouldBe None
-      DB2Dialect.getJDBCType(avro.getField("friends").schema()) shouldBe None
-      DB2Dialect.getJDBCType(avro.getField("signupDate").schema()) shouldBe None
+  describe("The Aggregate dialect") {
+
+    it("handles the right urls") {
+      val dialect = new AggregatedDialect(List(PostgresDialect, new JdbcDialect() {
+        override def canHandle(url: String): Boolean = url.startsWith("jdbc:postgresql")
+      }))
+      dialect.canHandle("jdbc:postgresql") shouldBe true
+      dialect.canHandle("jdbc:db2") shouldBe false
     }
 
-    it("works with general sql commands") {
-      DB2Dialect.getTableExistsQuery("table") shouldBe "SELECT * FROM table WHERE 1=0"
+    it("converts a schema") {
+      val dialect = new AggregatedDialect(List(PostgresDialect, DB2Dialect))
+      val avro = new Schema.Parser().parse(schema)
+      dialect.getJDBCType(avro.getField("username").schema()).get shouldBe JdbcType("TEXT", CHAR)
+      intercept[IllegalArgumentException] {
+        dialect.getJDBCType(avro.getField("passwordHash").schema()).get shouldBe JdbcType("BYTEA", BINARY)
+      }
 
-      DB2Dialect.getSchemaQuery("table") shouldBe "SELECT * FROM table WHERE 1=0"
+      val dialect1 = new AggregatedDialect(List(DB2Dialect, PostgresDialect))
+      dialect1.getJDBCType(avro.getField("username").schema()).get shouldBe JdbcType("CLOB", CLOB)
+      dialect1.getJDBCType(avro.getField("rate").schema()) shouldBe Some(JdbcType("DECIMAL(4,2)", DECIMAL))
     }
   }
 }

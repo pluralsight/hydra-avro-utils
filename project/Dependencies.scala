@@ -14,6 +14,7 @@ object Dependencies {
   val scalazVersion = "7.2.9"
   val scalaCacheVersion = "0.9.3"
   val jacksonVersion = "2.8.4"
+  val hikariCPVersion = "2.6.2"
   val springVersion = "4.2.2.RELEASE"
 
   object Compile {
@@ -50,22 +51,26 @@ object Dependencies {
       "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
       "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion
     )
+
+    val hikariCP = "com.zaxxer" % "HikariCP" % hikariCPVersion
+
   }
 
   object Test {
     val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion % "test"
     val junit = "junit" % "junit" % "4.12" % "test"
+    val h2db = "com.h2database" % "h2" % "1.4.196" % "test"
   }
 
 
   import Compile._
   import Test._
 
-  val testDeps = Seq(scalaTest, junit)
+  val testDeps = Seq(scalaTest, junit, h2db)
 
   val baseDeps = log4J ++ Seq(scalaz, scalaConfigs, avro, springCore) ++ jackson ++ testDeps
 
-  val coreDeps = baseDeps ++ Seq(guavacache) ++ confluent ++ kafka
+  val coreDeps = baseDeps ++ Seq(guavacache, hikariCP) ++ confluent ++ kafka
 
   val overrides = Set(log4J, typesafeConfig)
 }

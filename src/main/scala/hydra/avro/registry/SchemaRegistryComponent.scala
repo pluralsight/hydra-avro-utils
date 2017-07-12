@@ -10,5 +10,5 @@ trait SchemaRegistryComponent {
 
   def config:Config
 
-  def registry: SchemaRegistryClient
+  def registryClient: SchemaRegistryClient
 }

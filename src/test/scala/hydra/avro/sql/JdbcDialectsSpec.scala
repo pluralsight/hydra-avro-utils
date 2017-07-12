@@ -1,4 +1,4 @@
-package hydra.avro.serde.jdbc
+package hydra.avro.sql
 
 import org.scalatest.{FunSpecLike, Matchers}
 

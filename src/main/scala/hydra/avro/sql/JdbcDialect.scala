@@ -1,4 +1,4 @@
-package hydra.avro.serde.jdbc
+package hydra.avro.sql
 
 import org.apache.avro.Schema
 
@@ -15,6 +15,7 @@ abstract class JdbcDialect extends Serializable {
     */
   def canHandle(url: String): Boolean
 
+  def caseSensitiveAnalysis: Boolean = true
 
   /**
     * Retrieve the jdbc / sql type for a given Avro data type.
@@ -63,6 +64,7 @@ abstract class JdbcDialect extends Serializable {
     * None: The behavior of TRUNCATE TABLE is unknown (default).
     */
   def isCascadingTruncateTable(): Option[Boolean] = None
+
 }
 
 
