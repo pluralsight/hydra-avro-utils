@@ -1,27 +1,54 @@
 package hydra.avro.sql
 
+import java.sql.PreparedStatement
+import java.util.concurrent.TimeUnit
+
+import com.google.common.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
 import com.typesafe.config.Config
+import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import hydra.avro.sql.SaveMode.SaveMode
+import hydra.avro.util.ConfigUtils._
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker
 import org.apache.avro.generic.GenericRecord
-import org.apache.avro.{Schema, SchemaNormalization}
+import org.apache.avro.{AvroRuntimeException, Schema, SchemaNormalization}
+import org.slf4j.LoggerFactory
+import scala.collection.JavaConverters._
 
 
 /**
   * Created by alexsilva on 7/11/17.
+  *
+  * A batch size of 0 means that this class will never do any executeBatch and that external clients need to call
+  * flush()
   */
 class AvroRecordWriter(jdbcConfig: Config, schema: Schema,
                        mode: SaveMode = SaveMode.ErrorIfExists,
+                       checkCompatibility: Boolean,
+                       batchSize: Int = 50,
                        table: Option[String] = None,
                        database: Option[String] = None) {
 
-  private val store: Store = new StoreImpl(jdbcConfig)
+  import AvroRecordWriter._
+
+  private val ds = new HikariDataSource(new HikariConfig(jdbcConfig))
+
+  private val dialect = JdbcDialects.get(jdbcConfig.getString("dataSource.url"))
+
+  private val dbSyntax = UnderscoreSyntax
+
+  private val store: Catalog = new JdbcCatalog(ds, dbSyntax, dialect)
 
   private val tableName = table.getOrElse(schema.getName)
 
-  private val fingerprint = SchemaNormalization.parsingFingerprint64(schema)
-
   private val tableId = TableIdentifier(tableName, database)
+
+  private lazy val conn = ds.getConnection
+
+  private val cache: Cache[Long, PreparedStatement] = CacheBuilder.newBuilder()
+    .expireAfterWrite(10, TimeUnit.MINUTES).removalListener(removalListener)
+    .maximumSize(1000).build().asInstanceOf[Cache[Long, PreparedStatement]]
+
+  var rowCount = 0L
 
   val tableObj: Table =
     store.getTable(tableId).map { table =>
@@ -38,12 +65,51 @@ class AvroRecordWriter(jdbcConfig: Config, schema: Schema,
 
 
   def write(record: GenericRecord) = {
-    val recordFingerprint = SchemaNormalization.parsingFingerprint64(record.getSchema)
-    if (recordFingerprint != fingerprint && !AvroCompatibilityChecker.BACKWARD_CHECKER
-      .isCompatible(schema, record.getSchema)) {
-      throw new IllegalArgumentException("Schemas are not compatible.")
+    if (checkCompatibility && !AvroCompatibilityChecker.BACKWARD_CHECKER.isCompatible(schema, record.getSchema)) {
+      throw new AvroRuntimeException("Schemas are not compatible.")
     }
 
-    store.insertRecord(record, tableObj)
+    val fingerprint = SchemaNormalization.parsingFingerprint64(record.getSchema)
+    val stmt = cache.get(fingerprint, () => {
+      val name = tableObj.database.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
+      val insertStmt = JdbcUtils.insertStatement(dbSyntax.format(name), record.getSchema, dialect, dbSyntax)
+      logger.debug(s"Creating new prepared statement $insertStmt")
+      conn.prepareStatement(insertStmt)
+    })
+
+    new AvroPreparedStatementHelper(record, dialect, dbSyntax).setValues(stmt)
+    stmt.addBatch()
+    rowCount += 1
+    if (batchSize > 0 && rowCount % batchSize == 0) {
+      stmt.executeBatch()
+      rowCount = 0
+    }
+  }
+
+  def flush(): Unit = {
+    cache.asMap().values().asScala.foreach {
+      stmt => stmt.executeBatch() }
+  }
+
+  def close(): Unit = {
+    cache.asMap().values().asScala.foreach { stmt => stmt.executeBatch(); stmt.close() }
+    conn.close()
+    ds.close()
+  }
+}
+
+object AvroRecordWriter {
+  val logger = LoggerFactory.getLogger(getClass)
+
+  val removalListener = new RemovalListener[String, PreparedStatement] {
+    override def onRemoval(n: RemovalNotification[String, PreparedStatement]): Unit = {
+      logger.debug(s"Entry ${n.getKey} was removed. Closing and flushing prepared statement.")
+      try {
+        n.getValue.executeBatch()
+      }
+      finally {
+        n.getValue.close()
+      }
+    }
   }
 }

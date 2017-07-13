@@ -1,17 +1,31 @@
 package hydra.avro.sql
 
+import java.util.Properties
+
 import com.typesafe.config.ConfigFactory
+import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
+import hydra.avro.util.JdbcHelper
 import org.apache.avro.Schema
-import org.apache.avro.generic.GenericData
 import org.scalatest.{FunSpecLike, Matchers}
 
 /**
   * Created by alexsilva on 7/12/17.
   */
-class StoreImplSpec extends Matchers with FunSpecLike {
+class JdbcCatalogSpec extends Matchers with FunSpecLike with JdbcHelper {
+
+  import scala.collection.JavaConverters._
 
   val cfg = ConfigFactory.load().getConfig("db-cfg")
-  val store = new StoreImpl(cfg)
+
+  val properties = new Properties
+
+  cfg.entrySet().asScala.foreach(e => properties.setProperty(e.getKey(), cfg.getString(e.getKey())))
+
+  private val hikariConfig = new HikariConfig(properties)
+
+  private val ds = new HikariDataSource(hikariConfig)
+
+  val store = new JdbcCatalog(ds, NoOpSyntax, NoopDialect)
 
   val schemaStr =
     """
@@ -34,9 +48,7 @@ class StoreImplSpec extends Matchers with FunSpecLike {
   val schema = new Schema.Parser().parse(schemaStr)
 
   describe("The jdbc store") {
-    it("is configured") {
-      store.hikariConfig.getDataSourceClassName shouldBe "org.h2.jdbcx.JdbcDataSource"
-    }
+
 
     it("checks the db catalog for a table") {
       store.tableExists(TableIdentifier("table")) shouldBe false
@@ -44,11 +56,9 @@ class StoreImplSpec extends Matchers with FunSpecLike {
 
     it("creates a table") {
       val tblName = "table" + System.currentTimeMillis
-      val table = store.createTable(Table(tblName, schema))
-      val record = new GenericData.Record(schema)
-      record.put("id", 1)
-      record.put("username", "test")
-      store.insertRecord(record, table)
+      store.createTable(Table(tblName, schema))
+      store.tableExists(TableIdentifier("table")) shouldBe true
+
     }
   }
 

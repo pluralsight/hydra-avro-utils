@@ -128,12 +128,12 @@ private[avro] object JdbcUtils {
     columnMap(schema, dialect, dbSyntax).values.toSeq
   }
 
-  def columnMap(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax = NoOpSyntax): Map[String, Column] = {
+  def columnMap(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax = NoOpSyntax): Map[Schema.Field, Column] = {
     schema.getFields.asScala.map { field =>
       val name = dbSyntax.format(field.name)
       val typ = getJdbcType(field.schema(), dialect)
       val nullable = isNullableUnion(field.schema())
-      name -> Column(name, typ, nullable, field.schema(), Option(field.doc()))
+      field -> Column(name, typ, nullable, field.schema(), Option(field.doc()))
     }.toMap
   }
 
