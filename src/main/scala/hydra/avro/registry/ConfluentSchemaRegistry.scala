@@ -11,11 +11,11 @@ import scala.collection.JavaConverters._
   */
 trait ConfluentSchemaRegistry extends SchemaRegistryComponent {
 
-  val registry: SchemaRegistryClient = ConfluentSchemaRegistry.fromConfig(config)
+  val registryClient: SchemaRegistryClient = ConfluentSchemaRegistry.fromConfig(config)
   val registryUrl: String = ConfluentSchemaRegistry.registryUrl(config)
-  
+
   def getAllSubjects()(implicit ec: ExecutionContext): Future[Seq[String]] =
-    Future(registry.getAllSubjects().asScala.map(_.dropRight(6)).toSeq)
+    Future(registryClient.getAllSubjects().asScala.map(_.dropRight(6)).toSeq)
 
   /**
     * Due to limititations of the client registry API, this will only work for schemas registered within Hydra.
@@ -24,9 +24,9 @@ trait ConfluentSchemaRegistry extends SchemaRegistryComponent {
     * @return
     */
   def getById(id: Int)(implicit ec: ExecutionContext): Future[SchemaMetadata] = Future {
-    val schema = registry.getByID(id)
+    val schema = registryClient.getByID(id)
     val subject = schema.getNamespace + schema.getName + "-value"
-    registry.getLatestSchemaMetadata(subject)
+    registryClient.getLatestSchemaMetadata(subject)
   }
 }
 
@@ -47,3 +47,6 @@ object ConfluentSchemaRegistry {
   }
 }
 
+
+// A wrapper class for Java clients
+class ConfluentSchemaRegistryWrapper(val config:Config) extends ConfluentSchemaRegistry

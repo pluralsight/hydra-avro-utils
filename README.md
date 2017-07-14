@@ -6,4 +6,4 @@
 [![Join the chat at https://gitter.im/pluralsight/hydra](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/pluralsight/hydra-avro-utils?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 
-A collection of Avro utilities to facilitate the handling of streams containg Avro messages.
+A collection of Avro utilities to facilitate the handling of streams containing Avro messages.

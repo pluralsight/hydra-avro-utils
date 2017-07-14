@@ -1,6 +1,7 @@
-package hydra.avro.serde.jdbc
+package hydra.avro.sql
 
-import java.sql.Types._
+import java.sql.JDBCType
+import java.sql.JDBCType._
 
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Type
@@ -110,7 +111,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
     }
 
     it("extracts the right column list") {
-      JdbcUtils.columns(avro) shouldBe Seq("id", "username", "rate", "rateb", "active", "score", "scored",
+      JdbcUtils.columnNames(avro) shouldBe Seq("id", "username", "rate", "rateb", "active", "score", "scored",
         "passwordHash", "signupTimestamp", "scoreLong", "signupDate", "justANumber", "testUnion", "friends")
     }
 
@@ -145,7 +146,33 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
       }
     }
 
-    it("creates a schema") {
+    it("creates a column sequence") {
+      val schema =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin
+
+      val avro = new Schema.Parser().parse(schema)
+
+      JdbcUtils.columns(avro, NoopDialect) shouldBe Seq(
+        Column("id", JdbcType("INTEGER", JDBCType.INTEGER), false, avro.getField("id").schema(), Some("doc")),
+        Column("username", JdbcType("TEXT", JDBCType.VARCHAR), true, avro.getField("username").schema(), None))
+    }
+
+    it("creates an avro schema") {
 
       val schema =
         """
@@ -227,7 +254,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
         " NOT NULL, \"passwordHash\" BYTE NOT NULL, \"signupTimestamp\" TIMESTAMP NOT NULL, \"scoreLong\" " +
         "BIGINT NOT NULL, \"signupDate\" DATE NOT NULL, \"justANumber\" INTEGER NOT NULL, \"testUnion\" TEXT "
 
-      JdbcUtils.schemaString(avro,"url") shouldBe columns
+      JdbcUtils.schemaString(avro, NoopDialect) shouldBe columns
     }
   }
 }

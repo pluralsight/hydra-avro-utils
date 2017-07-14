@@ -7,6 +7,8 @@ val hydraAvroVersion = "0.5.0" + buildNumber
 
 lazy val defaultSettings = Seq(
   organization := "pluralsight",
+  bintrayOrganization := Some("pluralsight"),
+  licenses += ("Apache-2.0", url("https://opensource.org/licenses/Apache-2.0")),
   version := hydraAvroVersion,
   scalaVersion := "2.12.1",
   description := "Hydra AvroUtils",
@@ -23,7 +25,8 @@ lazy val defaultSettings = Seq(
   resolvers += "Confluent Maven Repo" at "http://packages.confluent.io/maven/",
 
   ivyLoggingLevel in ThisBuild := UpdateLogging.Quiet,
-  ivyScala := ivyScala.value map (_.copy(overrideScalaVersion = true))
+  ivyScala := ivyScala.value map (_.copy(overrideScalaVersion = true)),
+  isSnapshot := true
 )
 
 lazy val moduleSettings = defaultSettings ++ Test.testSettings

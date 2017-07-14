@@ -15,6 +15,7 @@
 
 package hydra.avro.util
 
+
 /**
   * Created by alexsilva on 12/7/15.
   */
@@ -35,3 +36,5 @@ object AvroUtils {
     }
   }
 }
+
+

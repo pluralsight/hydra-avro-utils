@@ -1,4 +1,6 @@
-package hydra.avro.serde.jdbc
+package hydra.avro.sql
+
+import java.sql.JDBCType
 
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Type._
@@ -11,8 +13,8 @@ private object DB2Dialect extends JdbcDialect {
   override def canHandle(url: String): Boolean = url.startsWith("jdbc:db2")
 
   override def getJDBCType(dt: Schema): Option[JdbcType] = dt.getType match {
-    case STRING => Option(JdbcType("CLOB", java.sql.Types.CLOB))
-    case BOOLEAN => Option(JdbcType("CHAR(1)", java.sql.Types.CHAR))
+    case STRING => Option(JdbcType("CLOB", JDBCType.CLOB))
+    case BOOLEAN => Option(JdbcType("CHAR(1)", JDBCType.CHAR))
     case _ => None
   }
 
