@@ -12,7 +12,9 @@ import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{AvroRuntimeException, Schema, SchemaNormalization}
 import org.slf4j.LoggerFactory
+
 import scala.collection.JavaConverters._
+import scala.util.{Failure, Success}
 
 
 /**
@@ -21,9 +23,10 @@ import scala.collection.JavaConverters._
   * A batch size of 0 means that this class will never do any executeBatch and that external clients need to call
   * flush()
   */
-class AvroRecordWriter(jdbcConfig: Config, schema: Schema,
+class AvroRecordWriter(jdbcConfig: Config,
+                       schema: Schema,
                        mode: SaveMode = SaveMode.ErrorIfExists,
-                       checkSchemaCompatibility: Boolean,
+                       checkSchemaCompatibility: Boolean = false,
                        dbSyntax: DbSyntax = UnderscoreSyntax,
                        batchSize: Int = 50,
                        table: Option[String] = None,
@@ -51,20 +54,29 @@ class AvroRecordWriter(jdbcConfig: Config, schema: Schema,
 
   private var rowCount = 0L
 
-  private val tableObj: Table =
-    store.getTable(tableId).map { table =>
+  private val tableObj: Table = {
+    val catalogTable = store.getTable(tableId).map { table =>
       mode match {
-        case SaveMode.Ignore => table
-        case SaveMode.Append => table
         case SaveMode.ErrorIfExists => throw new AnalysisException(s"Table $table already exists.")
+        case SaveMode.Overwrite => //todo: wipeout table
+          table
+        case _ => table
       }
     }.recover {
       case _: NoSuchTableException =>
         val table = Table(tableName, schema, database)
         store.createTable(table)
         table
-      case e: Throwable => throw e
-    }.get
+      case e: Throwable => {
+        throw e
+      }
+    }
+
+    catalogTable match {
+      case Success(table) => table
+      case Failure(ex) => ds.close(); throw ex;
+    }
+  }
 
 
   def write(record: GenericRecord): Unit = {
