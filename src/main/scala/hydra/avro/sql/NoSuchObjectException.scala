@@ -3,7 +3,7 @@ package hydra.avro.sql
 /**
   * Created by alexsilva on 7/11/17.
   */
-class NoSuchDatabaseException(db: String) extends AnalysisException(s"Database '$db' not found")
+class NoSuchSchemaException(schema: String) extends AnalysisException(s"Schema '$schema' not found")
 
-class NoSuchTableException(db: String, table: String)
-  extends AnalysisException(s"Table or view '$table' not found in database '$db'")
+class NoSuchTableException(schema: String, table: String)
+  extends AnalysisException(s"Table or view '$table' not found in schema '$schema'")

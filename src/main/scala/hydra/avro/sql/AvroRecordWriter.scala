@@ -23,7 +23,8 @@ import scala.collection.JavaConverters._
   */
 class AvroRecordWriter(jdbcConfig: Config, schema: Schema,
                        mode: SaveMode = SaveMode.ErrorIfExists,
-                       checkCompatibility: Boolean,
+                       checkSchemaCompatibility: Boolean,
+                       dbSyntax: DbSyntax = UnderscoreSyntax,
                        batchSize: Int = 50,
                        table: Option[String] = None,
                        database: Option[String] = None) {
@@ -34,8 +35,6 @@ class AvroRecordWriter(jdbcConfig: Config, schema: Schema,
 
   private val dialect = JdbcDialects.get(jdbcConfig.getString("dataSource.url"))
 
-  private val dbSyntax = UnderscoreSyntax
-
   private val store: Catalog = new JdbcCatalog(ds, dbSyntax, dialect)
 
   private val tableName = table.getOrElse(schema.getName)
@@ -44,13 +43,15 @@ class AvroRecordWriter(jdbcConfig: Config, schema: Schema,
 
   private lazy val conn = ds.getConnection
 
+  private val valueSetter = new AvroValueSetter(schema, dialect, dbSyntax)
+
   private val cache: Cache[Long, PreparedStatement] = CacheBuilder.newBuilder()
     .expireAfterWrite(10, TimeUnit.MINUTES).removalListener(removalListener)
     .maximumSize(1000).build().asInstanceOf[Cache[Long, PreparedStatement]]
 
-  var rowCount = 0L
+  private var rowCount = 0L
 
-  val tableObj: Table =
+  private val tableObj: Table =
     store.getTable(tableId).map { table =>
       mode match {
         case SaveMode.Ignore => table
@@ -59,25 +60,27 @@ class AvroRecordWriter(jdbcConfig: Config, schema: Schema,
       }
     }.recover {
       case _: NoSuchTableException =>
-        store.createTable(Table(tableName, schema, database))
+        val table = Table(tableName, schema, database)
+        store.createTable(table)
+        table
       case e: Throwable => throw e
     }.get
 
 
-  def write(record: GenericRecord) = {
-    if (checkCompatibility && !AvroCompatibilityChecker.BACKWARD_CHECKER.isCompatible(schema, record.getSchema)) {
+  def write(record: GenericRecord): Unit = {
+    if (checkSchemaCompatibility && !AvroCompatibilityChecker.BACKWARD_CHECKER.isCompatible(schema, record.getSchema)) {
       throw new AvroRuntimeException("Schemas are not compatible.")
     }
 
     val fingerprint = SchemaNormalization.parsingFingerprint64(record.getSchema)
     val stmt = cache.get(fingerprint, () => {
-      val name = tableObj.database.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
+      val name = tableObj.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
       val insertStmt = JdbcUtils.insertStatement(dbSyntax.format(name), record.getSchema, dialect, dbSyntax)
       logger.debug(s"Creating new prepared statement $insertStmt")
       conn.prepareStatement(insertStmt)
     })
 
-    new AvroPreparedStatementHelper(record, dialect, dbSyntax).setValues(stmt)
+    valueSetter.setValues(record, stmt)
     stmt.addBatch()
     rowCount += 1
     if (batchSize > 0 && rowCount % batchSize == 0) {
@@ -88,7 +91,8 @@ class AvroRecordWriter(jdbcConfig: Config, schema: Schema,
 
   def flush(): Unit = {
     cache.asMap().values().asScala.foreach {
-      stmt => stmt.executeBatch() }
+      stmt => stmt.executeBatch()
+    }
   }
 
   def close(): Unit = {

@@ -4,14 +4,13 @@ import java.util.Properties
 
 import com.typesafe.config.ConfigFactory
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
-import hydra.avro.util.JdbcHelper
 import org.apache.avro.Schema
-import org.scalatest.{FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 
 /**
   * Created by alexsilva on 7/12/17.
   */
-class JdbcCatalogSpec extends Matchers with FunSpecLike with JdbcHelper {
+class JdbcCatalogSpec extends Matchers with FunSpecLike with BeforeAndAfterAll {
 
   import scala.collection.JavaConverters._
 
@@ -47,18 +46,60 @@ class JdbcCatalogSpec extends Matchers with FunSpecLike with JdbcHelper {
 
   val schema = new Schema.Parser().parse(schemaStr)
 
-  describe("The jdbc store") {
+  override def beforeAll() = {
+    store.createTable(Table("test_table", schema))
+    store.createSchema("test_schema") shouldBe true
+    store.createTable(Table("test_table", schema, Some("test_schema")))
+  }
 
+  override def afterAll() = {
+    ds.close()
+  }
 
-    it("checks the db catalog for a table") {
+  describe("The jdbc Catalog") {
+
+    it("checks if a table exists") {
       store.tableExists(TableIdentifier("table")) shouldBe false
+      store.tableExists(TableIdentifier("test_table")) shouldBe true
     }
 
-    it("creates a table") {
-      val tblName = "table" + System.currentTimeMillis
-      store.createTable(Table(tblName, schema))
-      store.tableExists(TableIdentifier("table")) shouldBe true
+    it("checks if a schema exists") {
+      store.schemaExists("noschema") shouldBe false
+      store.schemaExists("test_schema") shouldBe true
+    }
 
+    it("checks if a table with a schema exists") {
+      store.tableExists(TableIdentifier("test_table", Some("test_schema"))) shouldBe true
+      store.tableExists(TableIdentifier("table", Some("unknown"))) shouldBe false
+    }
+
+    it("errors if table exists") {
+      intercept[UnableToCreateException] {
+        store.createTable(Table("test_table", schema, Some("test_schema")))
+      }
+    }
+
+    it("errors if it can't create a table in a different database") {
+      intercept[UnableToCreateException] {
+        store.createTable(Table("test_table", schema, Some("x")))
+      }
+    }
+
+    it("validates table names") {
+      store.validateName("test")
+      intercept[AnalysisException] {
+        store.validateName("!not-valid")
+      }
+    }
+
+    it("gets existent tables") {
+      store.getTable(TableIdentifier("unknown")).isFailure shouldBe true
+      store.getTable(TableIdentifier("unknown")).isFailure shouldBe true
+      intercept[NoSuchSchemaException] {
+        store.getTable(TableIdentifier("unknown", Some("unknown")))
+      }
+      store.getTable(TableIdentifier("test_table", Some("test_schema"))).get shouldBe Table("test_table",
+        Schema.create(Schema.Type.NULL), Some("test_schema"), None)
     }
   }
 

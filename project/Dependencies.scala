@@ -58,6 +58,7 @@ object Dependencies {
 
   object Test {
     val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion % "test"
+    val scalaMock = "org.scalamock" %% "scalamock-scalatest-support" % "3.5.0" % "test"
     val junit = "junit" % "junit" % "4.12" % "test"
     val h2db = "com.h2database" % "h2" % "1.4.196" % "test"
   }
@@ -66,7 +67,7 @@ object Dependencies {
   import Compile._
   import Test._
 
-  val testDeps = Seq(scalaTest, junit, h2db)
+  val testDeps = Seq(scalaTest, junit, h2db, scalaMock)
 
   val baseDeps = log4J ++ Seq(scalaz, scalaConfigs, avro, springCore) ++ jackson ++ testDeps
 

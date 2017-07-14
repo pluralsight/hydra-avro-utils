@@ -80,13 +80,12 @@ private[avro] object JdbcUtils {
   /**
     * Creates a table with a given schema.
     */
-  def createTable(
-                   schema: Schema,
-                   dialect: JdbcDialect,
-                   table: String,
-                   createTableOptions: String,
-                   dbSyntax: DbSyntax,
-                   conn: Connection): Int = {
+  def createTable(schema: Schema,
+                  dialect: JdbcDialect,
+                  table: String,
+                  createTableOptions: String,
+                  dbSyntax: DbSyntax,
+                  conn: Connection): Int = {
     val strSchema = schemaString(schema, dialect, dbSyntax)
     val sql = s"CREATE TABLE $table ($strSchema) $createTableOptions"
     logger.debug(sql)
@@ -97,6 +96,18 @@ private[avro] object JdbcUtils {
       statement.close()
     }
   }
+
+  def createSchema(name: String, createSchemaOptions: String, conn: Connection): Int = {
+    val sql = s"CREATE SCHEMA $name $createSchemaOptions"
+    logger.debug(sql)
+    val statement = conn.createStatement
+    try {
+      statement.executeUpdate(sql)
+    } finally {
+      statement.close()
+    }
+  }
+
 
   /**
     * Returns true if the table already exists in the JDBC database.
@@ -142,7 +153,7 @@ private[avro] object JdbcUtils {
   }
 
   def insertStatement(table: String, schema: Schema,
-                      dialect: JdbcDialect,dbs: DbSyntax): String = {
+                      dialect: JdbcDialect, dbs: DbSyntax): String = {
     import scala.collection.JavaConverters._
     val columns = schema.getFields.asScala
     val cols = columns.map(c => dialect.quoteIdentifier(dbs.format(c.name))).mkString(",")
@@ -150,7 +161,7 @@ private[avro] object JdbcUtils {
     s"INSERT INTO $table ($cols) VALUES ($placeholders)"
   }
 
-  private def getJdbcType(schema: Schema, dialect: JdbcDialect): JdbcType = {
+  def getJdbcType(schema: Schema, dialect: JdbcDialect): JdbcType = {
     dialect.getJDBCType(schema).orElse(getCommonJDBCType(schema)).getOrElse(
       throw new IllegalArgumentException(s"Can't get JDBC type for ${schema.getName}"))
   }

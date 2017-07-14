@@ -172,7 +172,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
         Column("username", JdbcType("TEXT", JDBCType.VARCHAR), true, avro.getField("username").schema(), None))
     }
 
-    it("creates a schema") {
+    it("creates an avro schema") {
 
       val schema =
         """

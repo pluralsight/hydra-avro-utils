@@ -20,7 +20,6 @@ package hydra.avro.sql
 import java.sql.{Connection, SQLException}
 import javax.sql.DataSource
 
-import hydra.avro.util.JdbcHelper
 import org.apache.avro.Schema
 
 import scala.util.{Failure, Success, Try}
@@ -31,21 +30,29 @@ import scala.util.{Failure, Success, Try}
   */
 class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) extends Catalog with JdbcHelper {
 
-
-  override def createTable(table: Table): Table = {
+  override def createSchema(schema: String): Boolean = {
     withConnection(ds.getConnection) { conn =>
-      val name = table.database.map(_ + ".").getOrElse("") + dbSyntax.format(table.name)
-      if (JdbcUtils.createTable(table.schema, dialect, name, "", dbSyntax, conn) != 0) {
-        throw new SQLException("Unable to save table.")
-      }
+      validateName(schema)
+      Try(JdbcUtils.createSchema(schema, "", conn)).map(_ => true)
+        .recover { case e: SQLException => throw UnableToCreateException(e.getMessage) }
+        .get
     }
-
-    table
   }
+
+  override def createTable(table: Table): Boolean = {
+    withConnection(ds.getConnection) { conn =>
+      validateName(table.name)
+      val name = table.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(table.name)
+      Try(JdbcUtils.createTable(table.avroSchema, dialect, name, "", dbSyntax, conn)).map(_ => true)
+        .recover { case e: SQLException => throw UnableToCreateException(e.getMessage) }
+        .get
+    }
+  }
+
 
   override def tableExists(name: TableIdentifier): Boolean = synchronized {
     withConnection(ds.getConnection) { conn =>
-      val db = formatDatabaseName(name.database.getOrElse(""))
+      val db = formatDatabaseName(name.schema.getOrElse(""))
       val table = formatTableName(name.table)
       JdbcUtils.tableExists(conn, db, table)
     }
@@ -55,14 +62,14 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
   override def getTable(tableId: TableIdentifier): Try[Table] = {
     withConnection(ds.getConnection) { conn =>
       val table = formatTableName(tableId.table)
-      tableId.database.foreach(requireDbExists(_, conn))
-      val db = tableId.database.getOrElse("")
+      tableId.schema.foreach(requireSchemaExists(_, conn))
+      val db = tableId.schema.getOrElse("")
       Try(if (JdbcUtils.tableExists(conn, db, table)) Success(true) else Failure(new NoSuchTableException(db, table)))
-        .flatMap(_ => doGetTable(tableId.database, table, conn))
+        .flatMap(_ => doGetTable(tableId.schema, table, conn))
     }
   }
 
-  private def validateName(name: String): Unit = {
+  private[sql] def validateName(name: String): Unit = {
     val validNameFormat = "([\\w_]+)".r
     if (!validNameFormat.pattern.matcher(name).matches()) {
       throw AnalysisException(s"`$name` is not a valid name for tables/databases. " +
@@ -70,22 +77,23 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
     }
   }
 
-  private def requireDbExists(db: String, conn: Connection): Unit = {
-    if (!databaseExists(db, conn)) {
-      throw new NoSuchDatabaseException(db)
-    }
+  private def requireSchemaExists(db: String, conn: Connection): Unit = {
+    if (!checkSchemaExists(db, conn)) throw new NoSuchSchemaException(db)
   }
 
-  private def databaseExists(db: String, conn: Connection): Boolean = {
-    val dbName = formatDatabaseName(db)
+  def schemaExists(schema: String): Boolean = {
+    withConnection(ds.getConnection)(checkSchemaExists(schema, _))
+  }
 
-    val rs = conn.getMetaData.getCatalogs
+  private def checkSchemaExists(schema: String, conn: Connection): Boolean = {
+    val dbName = formatDatabaseName(schema)
+    val rs = conn.getMetaData.getSchemas
     new Iterator[String] {
       def hasNext = rs.next()
 
       def next() = rs.getString(1)
-    }.find(_ == dbName).isDefined
 
+    }.find(_.equalsIgnoreCase(dbName)).isDefined
   }
 
   protected[this] def formatTableName(name: String): String = {
@@ -102,19 +110,18 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
     * Get the table or view with the specified name in the specified database. This throws an
     * `AnalysisException` when no `Table` can be found.
     */
-  private def doGetTable(dbName: Option[String], tableName: String, conn: Connection): Try[Table] = {
+  private def doGetTable(schema: Option[String], tableName: String, conn: Connection): Try[Table] = {
     val md = conn.getMetaData
-    val rs = md.getTables(null, dbName.getOrElse(null), "%", null)
-
-
+    val rs = md.getTables(null, schema.map(_.toUpperCase).orNull, "%", null)
     new Iterator[String] {
       def hasNext = rs.next()
 
       def next() = rs.getString(3)
 
       //TODO: generate schema from jdbc
-    }.find(_ == tableName).map(_ => Success(Table(tableName, Schema.create(Schema.Type.NULL), dbName)))
-      .getOrElse(throw new NoSuchTableException(db = dbName.getOrElse(""), table = tableName))
+    }.find(_.equalsIgnoreCase(tableName)).map(_ => Success(Table(tableName, Schema.create(Schema.Type.NULL), schema)))
+      .getOrElse(throw new NoSuchTableException(schema = schema.getOrElse(""), table = tableName))
   }
+
 }
 
