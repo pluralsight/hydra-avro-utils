@@ -6,12 +6,14 @@ import java.util.concurrent.TimeUnit
 import com.google.common.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
 import com.typesafe.config.Config
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
-import hydra.avro.sql.SaveMode.SaveMode
+import hydra.avro.io.{RecordWriter, SaveMode}
+import hydra.avro.io.SaveMode.SaveMode
 import hydra.avro.util.ConfigUtils._
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{AvroRuntimeException, Schema, SchemaNormalization}
 import org.slf4j.LoggerFactory
+import AvroCompatibilityChecker.NO_OP_CHECKER
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
@@ -23,16 +25,16 @@ import scala.util.{Failure, Success}
   * A batch size of 0 means that this class will never do any executeBatch and that external clients need to call
   * flush()
   */
-class AvroRecordWriter(jdbcConfig: Config,
-                       schema: Schema,
-                       mode: SaveMode = SaveMode.ErrorIfExists,
-                       checkSchemaCompatibility: Boolean = false,
+class JdbcRecordWriter(jdbcConfig: Config,
+                       val schema: Schema,
+                       val mode: SaveMode = SaveMode.ErrorIfExists,
+                       override val compatibilityChecker: AvroCompatibilityChecker = NO_OP_CHECKER,
                        dbSyntax: DbSyntax = UnderscoreSyntax,
                        batchSize: Int = 50,
                        table: Option[String] = None,
-                       database: Option[String] = None) {
+                       database: Option[String] = None) extends RecordWriter {
 
-  import AvroRecordWriter._
+  import JdbcRecordWriter._
 
   private val ds = new HikariDataSource(new HikariConfig(jdbcConfig))
 
@@ -80,7 +82,7 @@ class AvroRecordWriter(jdbcConfig: Config,
 
 
   def write(record: GenericRecord): Unit = {
-    if (checkSchemaCompatibility && !AvroCompatibilityChecker.BACKWARD_CHECKER.isCompatible(schema, record.getSchema)) {
+    if (!compatibilityChecker.isCompatible(schema, record.getSchema)) {
       throw new AvroRuntimeException("Schemas are not compatible.")
     }
 
@@ -114,7 +116,7 @@ class AvroRecordWriter(jdbcConfig: Config,
   }
 }
 
-object AvroRecordWriter {
+object JdbcRecordWriter {
   val logger = LoggerFactory.getLogger(getClass)
 
   val removalListener = new RemovalListener[String, PreparedStatement] {

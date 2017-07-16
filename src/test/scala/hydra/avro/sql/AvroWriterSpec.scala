@@ -4,6 +4,7 @@ import java.util.Properties
 
 import com.typesafe.config.ConfigFactory
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
+import hydra.avro.io.SaveMode
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
@@ -71,12 +72,12 @@ class AvroWriterSpec extends Matchers with FunSpecLike with BeforeAndAfterAll wi
       catalog.createTable(Table("tester", schema))
       val s = new Schema.Parser().parse(schemaStr)
       intercept[AnalysisException] {
-        new AvroRecordWriter(cfg, s, SaveMode.ErrorIfExists)
+        new JdbcRecordWriter(cfg, s, SaveMode.ErrorIfExists)
       }
 
-      new AvroRecordWriter(cfg, s, SaveMode.Append).close()
-      new AvroRecordWriter(cfg, s, SaveMode.Overwrite).close()
-      new AvroRecordWriter(cfg, s, SaveMode.Ignore).close()
+      new JdbcRecordWriter(cfg, s, SaveMode.Append).close()
+      new JdbcRecordWriter(cfg, s, SaveMode.Overwrite).close()
+      new JdbcRecordWriter(cfg, s, SaveMode.Ignore).close()
     }
 
     it("creates a table") {
@@ -94,12 +95,12 @@ class AvroWriterSpec extends Matchers with FunSpecLike with BeforeAndAfterAll wi
           |}""".stripMargin
 
       val s = new Schema.Parser().parse(schemaStr)
-      new AvroRecordWriter(cfg, s, SaveMode.Append).close()
+      new JdbcRecordWriter(cfg, s, SaveMode.Append).close()
       catalog.tableExists(TableIdentifier("tester")) shouldBe true
     }
 
     it("writes") {
-      val writer = new AvroRecordWriter(cfg, schema, batchSize = 1)
+      val writer = new JdbcRecordWriter(cfg, schema, batchSize = 1)
       writer.write(record)
       writer.flush()
       withConnection(ds.getConnection) { c =>
@@ -132,7 +133,7 @@ class AvroWriterSpec extends Matchers with FunSpecLike with BeforeAndAfterAll wi
           |}""".stripMargin
 
 
-      val writer = new AvroRecordWriter(cfg, new Schema.Parser().parse(schemaStr), batchSize = 2)
+      val writer = new JdbcRecordWriter(cfg, new Schema.Parser().parse(schemaStr), batchSize = 2)
       writer.write(record)
 
       withConnection(ds.getConnection) { c =>
@@ -174,7 +175,7 @@ class AvroWriterSpec extends Matchers with FunSpecLike with BeforeAndAfterAll wi
           |}""".stripMargin
 
 
-      val writer = new AvroRecordWriter(cfg, new Schema.Parser().parse(schemaStr), batchSize = 2)
+      val writer = new JdbcRecordWriter(cfg, new Schema.Parser().parse(schemaStr), batchSize = 2)
       writer.write(record)
 
       withConnection(ds.getConnection) { c =>

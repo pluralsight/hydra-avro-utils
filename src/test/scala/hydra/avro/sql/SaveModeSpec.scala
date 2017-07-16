@@ -1,5 +1,6 @@
 package hydra.avro.sql
 
+import hydra.avro.io.SaveMode
 import org.scalatest.{FunSpecLike, Matchers}
 
 /**
