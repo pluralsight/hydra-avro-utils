@@ -76,6 +76,8 @@ class JdbcRecordWriter(jdbcConfig: Config,
     }
   }
 
+ // private val constPk: Option[Seq[Schema.Field]] = primaryKeys.map(_.split(",").map(schema.getField))
+ // private val pk: Seq[Schema.Field] = constPk.getOrElse(JdbcUtils.getIdFields(schema))
   private val pk = JdbcUtils.getIdFields(schema)
   private val name = tableObj.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
   private val stmt = dialect.upsert(dbSyntax.format(name), schema, dbSyntax, pk)

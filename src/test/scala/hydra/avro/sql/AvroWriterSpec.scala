@@ -72,12 +72,12 @@ class AvroWriterSpec extends Matchers with FunSpecLike with BeforeAndAfterAll wi
       catalog.createTable(Table("tester", schema))
       val s = new Schema.Parser().parse(schemaStr)
       intercept[AnalysisException] {
-        new JdbcRecordWriter(cfg, s, SaveMode.ErrorIfExists)
+        new JdbcRecordWriter(cfg, s, None, SaveMode.ErrorIfExists)
       }
 
-      new JdbcRecordWriter(cfg, s, SaveMode.Append).close()
-      new JdbcRecordWriter(cfg, s, SaveMode.Overwrite).close()
-      new JdbcRecordWriter(cfg, s, SaveMode.Ignore).close()
+      new JdbcRecordWriter(cfg, s, None, SaveMode.Append).close()
+      new JdbcRecordWriter(cfg, s, None, SaveMode.Overwrite).close()
+      new JdbcRecordWriter(cfg, s, None, SaveMode.Ignore).close()
     }
 
     it("creates a table") {
@@ -95,7 +95,7 @@ class AvroWriterSpec extends Matchers with FunSpecLike with BeforeAndAfterAll wi
           |}""".stripMargin
 
       val s = new Schema.Parser().parse(schemaStr)
-      new JdbcRecordWriter(cfg, s, SaveMode.Append).close()
+      new JdbcRecordWriter(cfg, s, None, SaveMode.Append).close()
       catalog.tableExists(TableIdentifier("tester")) shouldBe true
     }
 
