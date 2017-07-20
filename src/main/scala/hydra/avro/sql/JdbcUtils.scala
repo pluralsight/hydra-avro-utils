@@ -128,11 +128,14 @@ private[avro] object JdbcUtils {
   def schemaString(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax = NoOpSyntax): String = {
     val schemaStr = schema.getFields.asScala.map { field =>
       val name = dialect.quoteIdentifier(dbSyntax.format(field.name))
-      val typ: String = getJdbcType(field.schema(), dialect).databaseTypeDefinition
+      val typ = getJdbcType(field.schema(), dialect).databaseTypeDefinition
       val nullable = if (isNullableUnion(field.schema())) "" else "NOT NULL"
       s"$name $typ $nullable"
     }
-    schemaStr.mkString(",")
+    val pkSeq = getIdFields(schema).map(f => dialect.quoteIdentifier(dbSyntax.format(f.name())))
+    val pkStmt = if (!pkSeq.isEmpty) s" PRIMARY KEY (${pkSeq.mkString(",")})" else ""
+    val ddl = s"${schemaStr.mkString(",")}${pkStmt}"
+    ddl
   }
 
 
@@ -146,7 +149,8 @@ private[avro] object JdbcUtils {
       val typ = getJdbcType(field.schema(), dialect)
       val nullable = isNullableUnion(field.schema())
       field -> Column(name, typ, nullable, field.schema(), Option(field.doc()))
-    }.toMap
+    }
+      .toMap
   }
 
   def columnNames(schema: Schema, dbSyntax: DbSyntax = NoOpSyntax): Seq[String] = {

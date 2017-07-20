@@ -24,6 +24,9 @@ import scala.util.{Failure, Success}
   *
   * A batch size of 0 means that this class will never do any executeBatch and that external clients need to call
   * flush()
+  *
+  * If the primary keys are provided as a constructor argument, it overrides anything that
+  * may have been provided by the schema.
   */
 class JdbcRecordWriter(jdbcConfig: Config,
                        val schema: Schema,

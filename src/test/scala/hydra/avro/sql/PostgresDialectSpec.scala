@@ -171,7 +171,7 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
         UnderscoreSyntax) shouldBe "INSERT INTO table (\"id\",\"username\",\"address\") VALUES (?,?,to_json(?))"
     }
 
-    it ("builds an upsert") {
+    it("builds an upsert") {
 
       val schema =
         """
@@ -203,16 +203,17 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
 
       val idFields = JdbcUtils.getIdFields(avro)
 
-      val stmt = PostgresDialect.buildUpsert("table", avro, UnderscoreSyntax,idFields)
-      val expected = """insert into table ("id","username","address") values (?,?,to_json(?))
-                       |on conflict (id)
-                       |do update set ("username","address") = (?,to_json(?))
-                       |where table.id=?;""".stripMargin
+      val stmt = PostgresDialect.buildUpsert("table", avro, UnderscoreSyntax, idFields)
+      val expected =
+        """insert into table ("id","username","address") values (?,?,to_json(?))
+          |on conflict (id)
+          |do update set ("username","address") = (?,to_json(?))
+          |where table.id=?;""".stripMargin
 
       stmt shouldBe expected
     }
 
-    it ("builds an upsert with composite primary keys") {
+    it("builds an upsert with composite primary keys") {
 
       val schema =
         """
@@ -242,11 +243,12 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
 
       val idFields = JdbcUtils.getIdFields(avro)
 
-      val stmt = PostgresDialect.buildUpsert("table", avro, UnderscoreSyntax,idFields)
-      val expected = """insert into table ("id1","id2","username") values (?,?,?)
-                       |on conflict (id1,id2)
-                       |do update set ("username") = (?)
-                       |where table.id1=? and table.id2=?;""".stripMargin
+      val stmt = PostgresDialect.buildUpsert("table", avro, UnderscoreSyntax, idFields)
+      val expected =
+        """insert into table ("id1","id2","username") values (?,?,?)
+          |on conflict (id1,id2)
+          |do update set ("username") = (?)
+          |where table.id1=? and table.id2=?;""".stripMargin
 
       stmt shouldBe expected
     }
