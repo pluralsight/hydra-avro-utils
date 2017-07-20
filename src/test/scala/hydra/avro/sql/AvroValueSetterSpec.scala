@@ -1,7 +1,7 @@
 package hydra.avro.sql
 
 import java.math.{MathContext, RoundingMode}
-import java.sql.{Connection, Date, PreparedStatement, Timestamp}
+import java.sql._
 import java.time.{LocalDate, ZoneId}
 
 import com.google.common.collect.Lists
@@ -80,7 +80,22 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       |				"type": "array",
       |				"items": "string"
       |			}
-      |		}
+      |		},
+      |  {
+      |    "name": "testEnum",
+      |    "type": {
+      |        "type": "enum",
+      |        "name": "enum_type",
+      |        "symbols": ["test1", "test2"]
+      |    }
+      |  },
+      |      {"name": "address", "type":
+      |      {"type": "record",
+      |       "name": "AddressRecord",
+      |       "fields": [
+      |         {"name": "street", "type": "string"}
+      |       ]}
+      |    }
       |	]
       |}
     """.stripMargin
@@ -111,6 +126,9 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       (mockedStmt.setString _).expects(9, "test")
       (mockedStmt.setNull(_: Int, _: Int)).expects(10, java.sql.Types.CHAR)
       (mockedStmt.setArray _).expects(11, mockArray)
+      (mockedStmt.setString _).expects(12, "test1")
+//      (mockedStmt.setObject(_: Int, _: AnyRef,_:SQLType))
+//        .expects(13, """{"street": "happy drive"}""",JDBCType.ARRAY)
 
       val record = new GenericData.Record(schema)
       record.put("id", 1)
@@ -124,6 +142,10 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       record.put("friends", new GenericData.Array[String](schema.getField("friends").schema(), friends))
       record.put("testUnion", "test")
       record.put("testNullUnion", null)
+      record.put("testEnum", "test1")
+      val address = new GenericData.Record(schema.getField("address").schema)
+      address.put("street", "caroline drive")
+      record.put("address", address)
       valueSetter.setValues(record, mockedStmt)
     }
   }

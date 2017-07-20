@@ -26,6 +26,7 @@ private[avro] object JdbcUtils {
       case INT => commonIntTypes(dt)
       case BYTES => commonByteTypes(dt)
       case UNION => commonUnionTypes(dt)
+      case ENUM => Some(JdbcType("TEXT", JDBCType.VARCHAR))
       case _ => numberTypes(dt)
     }
   }
@@ -125,15 +126,15 @@ private[avro] object JdbcUtils {
   }
 
   def schemaString(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax = NoOpSyntax): String = {
-    val sb = new StringBuilder()
-    schema.getFields.asScala foreach { field =>
+    val schemaStr = schema.getFields.asScala.map { field =>
       val name = dialect.quoteIdentifier(dbSyntax.format(field.name))
       val typ: String = getJdbcType(field.schema(), dialect).databaseTypeDefinition
       val nullable = if (isNullableUnion(field.schema())) "" else "NOT NULL"
-      sb.append(s", $name $typ $nullable")
+      s"$name $typ $nullable"
     }
-    if (sb.length < 2) "" else sb.substring(2)
+    schemaStr.mkString(",")
   }
+
 
   def columns(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax = NoOpSyntax): Seq[Column] = {
     columnMap(schema, dialect, dbSyntax).values.toSeq
@@ -152,13 +153,15 @@ private[avro] object JdbcUtils {
     schema.getFields.asScala.map(f => dbSyntax.format(f.name()))
   }
 
-  def insertStatement(table: String, schema: Schema,
-                      dialect: JdbcDialect, dbs: DbSyntax): String = {
-    import scala.collection.JavaConverters._
-    val columns = schema.getFields.asScala
-    val cols = columns.map(c => dialect.quoteIdentifier(dbs.format(c.name))).mkString(",")
-    val placeholders = schema.getFields.asScala.map(_ => "?").mkString(",")
-    s"INSERT INTO $table ($cols) VALUES ($placeholders)"
+  def getIdFields(schema: Schema): Seq[Schema.Field] = {
+    Option(schema.getProp("primary-key")).map(_.split(",")) match {
+      case Some(ids) =>
+        ids.map { id =>
+          Option(schema.getField(id))
+            .getOrElse(throw new IllegalArgumentException(s"Field $id is not in schema."))
+        }
+      case None => Seq.empty
+    }
   }
 
   def getJdbcType(schema: Schema, dialect: JdbcDialect): JdbcType = {

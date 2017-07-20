@@ -1,6 +1,6 @@
 package hydra.avro.sql
 
-import java.sql.PreparedStatement
+import java.sql.{BatchUpdateException, PreparedStatement}
 import java.util.concurrent.TimeUnit
 
 import com.google.common.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
@@ -88,8 +88,9 @@ class JdbcRecordWriter(jdbcConfig: Config,
 
     val fingerprint = SchemaNormalization.parsingFingerprint64(record.getSchema)
     val stmt = cache.get(fingerprint, () => {
+      val pk = JdbcUtils.getIdFields(record.getSchema)
       val name = tableObj.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
-      val insertStmt = JdbcUtils.insertStatement(dbSyntax.format(name), record.getSchema, dialect, dbSyntax)
+      val insertStmt = dialect.insertStatement(dbSyntax.format(name), schema, dbSyntax)
       logger.debug(s"Creating new prepared statement $insertStmt")
       conn.prepareStatement(insertStmt)
     })
@@ -98,21 +99,34 @@ class JdbcRecordWriter(jdbcConfig: Config,
     stmt.addBatch()
     rowCount += 1
     if (batchSize > 0 && rowCount % batchSize == 0) {
-      stmt.executeBatch()
+      executeBatch(stmt)
       rowCount = 0
     }
   }
 
+
   def flush(): Unit = {
-    cache.asMap().values().asScala.foreach {
-      stmt => stmt.executeBatch()
-    }
+    cache.asMap().values().asScala.foreach(executeBatch)
   }
 
   def close(): Unit = {
-    cache.asMap().values().asScala.foreach { stmt => stmt.executeBatch(); stmt.close() }
+    cache.asMap().values().asScala.foreach {
+      stmt =>
+        executeBatch(stmt)
+        stmt.close()
+    }
     conn.close()
     ds.close()
+  }
+
+
+  private def executeBatch(stmt: PreparedStatement) = {
+    try {
+      stmt.executeBatch()
+    }
+    catch {
+      case e: BatchUpdateException => e.getNextException().printStackTrace()
+    }
   }
 }
 

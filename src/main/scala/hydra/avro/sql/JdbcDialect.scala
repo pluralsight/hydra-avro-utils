@@ -1,6 +1,7 @@
 package hydra.avro.sql
 
 import org.apache.avro.Schema
+import org.apache.avro.Schema.Field
 
 /**
   * Created by alexsilva on 5/4/17.
@@ -34,6 +35,13 @@ abstract class JdbcDialect extends Serializable {
   }
 
   /**
+    * We rely on the database to convert a TEXT/CHAR sql type to JSON.
+    * Most databases have string to json converters; this method should
+    * return the correct one for the dialect.
+    */
+  def jsonPlaceholder: String = "?"
+
+  /**
     * Get the SQL query that should be used to find if the given table exists. Dialects can
     * override this method to return a query that works best in a particular database.
     *
@@ -65,13 +73,52 @@ abstract class JdbcDialect extends Serializable {
     */
   def isCascadingTruncateTable(): Option[Boolean] = None
 
+  /**
+    * A default implementation for insert statements
+    *
+    */
+  def insertStatement(table: String, schema: Schema, dbs: DbSyntax): String = {
+    import scala.collection.JavaConverters._
+    val columns = schema.getFields.asScala
+    val cols = columns.map(c => quoteIdentifier(dbs.format(c.name))).mkString(",")
+    s"INSERT INTO $table ($cols) VALUES (${parameterize(columns).mkString(",")})"
+  }
+
+  /**
+    * Returns the upsert statment for this dialect.
+    * Optional operation; default implementation throws a UnsupportedOperationException
+    */
+  @throws[UnsupportedOperationException]
+  def buildUpsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Seq[Field]): String = {
+    throw new UnsupportedOperationException("Upserts are not supported by this dialect.")
+  }
+
+  /**
+    * Convenience method that calls the underlying buildUpsertStatement method if the id exists.
+    */
+  def upsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Option[Seq[Field]]): String = {
+    idFields match {
+      case Some(ids) =>
+        buildUpsert(table, schema, dbs, ids)
+
+      case None =>
+        insertStatement(table, schema, dbs)
+    }
+  }
+
+  protected def parameterize(fields: Seq[Schema.Field]): Seq[String] = {
+    fields.map { c =>
+      if (JdbcUtils.getJdbcType(c.schema(), this).databaseTypeDefinition == "JSON") jsonPlaceholder else "?"
+    }
+  }
+
 }
 
 
 object JdbcDialects {
 
   /**
-    * Register a dialect for use on all new matching jdbc `org.apache.spark.sql.DataFrame`.
+    * Register a dialect for use on all new matching jdbc
     * Reading an existing dialect will cause a move-to-front.
     *
     * @param dialect The new dialect.
@@ -113,4 +160,8 @@ object JdbcDialects {
   */
 private object NoopDialect extends JdbcDialect {
   override def canHandle(url: String): Boolean = true
+
+  override def buildUpsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Seq[Field]): String = {
+    throw new UnsupportedOperationException("Not supported.")
+  }
 }

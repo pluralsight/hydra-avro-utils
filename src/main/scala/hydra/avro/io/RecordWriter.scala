@@ -29,6 +29,11 @@ trait RecordWriter {
   def flush(): Unit
 
   /**
+    * Closes this writer, also triggering a flush() if needed.
+    */
+  def close(): Unit
+
+  /**
     * The underlying schema this record writer is expecting to receive.
     *
     * This control the creation of any underlying data stores, such as tables in a database.

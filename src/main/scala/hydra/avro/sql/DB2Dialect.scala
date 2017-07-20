@@ -19,4 +19,5 @@ private object DB2Dialect extends JdbcDialect {
   }
 
   override def isCascadingTruncateTable(): Option[Boolean] = Some(false)
+
 }
