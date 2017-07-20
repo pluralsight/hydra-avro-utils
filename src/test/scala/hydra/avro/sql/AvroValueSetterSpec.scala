@@ -127,8 +127,7 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       (mockedStmt.setNull(_: Int, _: Int)).expects(10, java.sql.Types.CHAR)
       (mockedStmt.setArray _).expects(11, mockArray)
       (mockedStmt.setString _).expects(12, "test1")
-//      (mockedStmt.setObject(_: Int, _: AnyRef,_:SQLType))
-//        .expects(13, """{"street": "happy drive"}""",JDBCType.ARRAY)
+      (mockedStmt.setString _).expects(13, """{"street": "happy drive"}""")
 
       val record = new GenericData.Record(schema)
       record.put("id", 1)
@@ -144,7 +143,7 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       record.put("testNullUnion", null)
       record.put("testEnum", "test1")
       val address = new GenericData.Record(schema.getField("address").schema)
-      address.put("street", "caroline drive")
+      address.put("street", "happy drive")
       record.put("address", address)
       valueSetter.setValues(record, mockedStmt)
     }

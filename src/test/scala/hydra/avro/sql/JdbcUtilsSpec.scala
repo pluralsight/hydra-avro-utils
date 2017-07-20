@@ -440,6 +440,4 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
         "\"testEnum\" TEXT NOT NULL PRIMARY KEY (\"id1\",\"id2\")"
     }
   }
-
-
 }

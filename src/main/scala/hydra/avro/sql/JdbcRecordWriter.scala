@@ -1,21 +1,20 @@
 package hydra.avro.sql
 
 import java.sql.{BatchUpdateException, PreparedStatement}
-import java.util.concurrent.TimeUnit
 
-import com.google.common.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
+import com.google.common.cache.{RemovalListener, RemovalNotification}
 import com.typesafe.config.Config
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
-import hydra.avro.io.{RecordWriter, SaveMode}
 import hydra.avro.io.SaveMode.SaveMode
+import hydra.avro.io.{RecordWriter, SaveMode}
 import hydra.avro.util.ConfigUtils._
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker
+import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker.NO_OP_CHECKER
 import org.apache.avro.generic.GenericRecord
-import org.apache.avro.{AvroRuntimeException, Schema, SchemaNormalization}
+import org.apache.avro.{AvroRuntimeException, Schema}
 import org.slf4j.LoggerFactory
-import AvroCompatibilityChecker.NO_OP_CHECKER
 
-import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.util.{Failure, Success}
 
 
@@ -35,9 +34,7 @@ class JdbcRecordWriter(jdbcConfig: Config,
                        dbSyntax: DbSyntax = UnderscoreSyntax,
                        batchSize: Int = 50,
                        table: Option[String] = None,
-                       database: Option[String] = None) extends RecordWriter {
-
-  import JdbcRecordWriter._
+                       database: Option[String] = None) extends RecordWriter with JdbcHelper {
 
   private val ds = new HikariDataSource(new HikariConfig(jdbcConfig))
 
@@ -49,13 +46,9 @@ class JdbcRecordWriter(jdbcConfig: Config,
 
   private val tableId = TableIdentifier(tableName, database)
 
-  private lazy val conn = ds.getConnection
-
   private val valueSetter = new AvroValueSetter(schema, dialect, dbSyntax)
 
-  private val cache: Cache[Long, PreparedStatement] = CacheBuilder.newBuilder()
-    .expireAfterWrite(10, TimeUnit.MINUTES).removalListener(removalListener)
-    .maximumSize(1000).build().asInstanceOf[Cache[Long, PreparedStatement]]
+  private val unflushedRecords = new mutable.ArrayBuffer[GenericRecord]()
 
   private var rowCount = 0L
 
@@ -83,42 +76,35 @@ class JdbcRecordWriter(jdbcConfig: Config,
     }
   }
 
+  private val pk = JdbcUtils.getIdFields(schema)
+  private val name = tableObj.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
+  private val stmt = dialect.upsert(dbSyntax.format(name), schema, dbSyntax, pk)
 
   def write(record: GenericRecord): Unit = {
     if (!compatibilityChecker.isCompatible(schema, record.getSchema)) {
       throw new AvroRuntimeException("Schemas are not compatible.")
     }
 
-    val fingerprint = SchemaNormalization.parsingFingerprint64(record.getSchema)
-    val stmt = cache.get(fingerprint, () => {
-      val pk = JdbcUtils.getIdFields(record.getSchema)
-      val name = tableObj.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
-      val insertStmt = dialect.insertStatement(dbSyntax.format(name), schema, dbSyntax)
-      logger.debug(s"Creating new prepared statement $insertStmt")
-      conn.prepareStatement(insertStmt)
-    })
-
-    valueSetter.setValues(record, stmt)
-    stmt.addBatch()
+    unflushedRecords += record
     rowCount += 1
     if (batchSize > 0 && rowCount % batchSize == 0) {
-      executeBatch(stmt)
+      flush()
       rowCount = 0
     }
   }
 
-
-  def flush(): Unit = {
-    cache.asMap().values().asScala.foreach(executeBatch)
+  def flush(): Unit = withConnection(ds.getConnection) { conn =>
+    val pstmt = conn.prepareStatement(stmt)
+    unflushedRecords.foreach { r =>
+      valueSetter.setValues(r, pstmt)
+      pstmt.addBatch()
+    }
+    pstmt.executeBatch()
+    unflushedRecords.clear()
   }
 
   def close(): Unit = {
-    cache.asMap().values().asScala.foreach {
-      stmt =>
-        executeBatch(stmt)
-        stmt.close()
-    }
-    conn.close()
+    flush()
     ds.close()
   }
 

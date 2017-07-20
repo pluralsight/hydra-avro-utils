@@ -96,14 +96,8 @@ abstract class JdbcDialect extends Serializable {
   /**
     * Convenience method that calls the underlying buildUpsertStatement method if the id exists.
     */
-  def upsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Option[Seq[Field]]): String = {
-    idFields match {
-      case Some(ids) =>
-        buildUpsert(table, schema, dbs, ids)
-
-      case None =>
-        insertStatement(table, schema, dbs)
-    }
+  def upsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Seq[Field]): String = {
+    if (idFields.isEmpty) insertStatement(table, schema, dbs) else buildUpsert(table, schema, dbs, idFields)
   }
 
   protected def parameterize(fields: Seq[Schema.Field]): Seq[String] = {
