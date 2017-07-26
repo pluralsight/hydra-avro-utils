@@ -3,11 +3,9 @@ package hydra.avro.sql
 import java.sql.{BatchUpdateException, PreparedStatement}
 
 import com.google.common.cache.{RemovalListener, RemovalNotification}
-import com.typesafe.config.Config
-import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
+import com.zaxxer.hikari.HikariDataSource
 import hydra.avro.io.SaveMode.SaveMode
 import hydra.avro.io.{RecordWriter, SaveMode}
-import hydra.avro.util.ConfigUtils._
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker.NO_OP_CHECKER
 import org.apache.avro.generic.GenericRecord
@@ -27,20 +25,17 @@ import scala.util.{Failure, Success}
   * If the primary keys are provided as a constructor argument, it overrides anything that
   * may have been provided by the schema.
   */
-class JdbcRecordWriter(jdbcConfig: Config,
+class JdbcRecordWriter(val dataSource: HikariDataSource,
                        val schema: Schema,
                        val mode: SaveMode = SaveMode.ErrorIfExists,
+                       dialect: JdbcDialect,
                        override val compatibilityChecker: AvroCompatibilityChecker = NO_OP_CHECKER,
                        dbSyntax: DbSyntax = UnderscoreSyntax,
                        batchSize: Int = 50,
                        table: Option[String] = None,
                        database: Option[String] = None) extends RecordWriter with JdbcHelper {
 
-  private val ds = new HikariDataSource(new HikariConfig(jdbcConfig))
-
-  private val dialect = JdbcDialects.get(jdbcConfig.getString("dataSource.url"))
-
-  private val store: Catalog = new JdbcCatalog(ds, dbSyntax, dialect)
+  private val store: Catalog = new JdbcCatalog(dataSource, dbSyntax, dialect)
 
   private val tableName = table.getOrElse(schema.getName)
 
@@ -72,12 +67,12 @@ class JdbcRecordWriter(jdbcConfig: Config,
 
     catalogTable match {
       case Success(table) => table
-      case Failure(ex) => ds.close(); throw ex;
+      case Failure(ex) => throw ex;
     }
   }
 
- // private val constPk: Option[Seq[Schema.Field]] = primaryKeys.map(_.split(",").map(schema.getField))
- // private val pk: Seq[Schema.Field] = constPk.getOrElse(JdbcUtils.getIdFields(schema))
+  // private val constPk: Option[Seq[Schema.Field]] = primaryKeys.map(_.split(",").map(schema.getField))
+  // private val pk: Seq[Schema.Field] = constPk.getOrElse(JdbcUtils.getIdFields(schema))
   private val pk = JdbcUtils.getIdFields(schema)
   private val name = tableObj.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
   private val stmt = dialect.upsert(dbSyntax.format(name), schema, dbSyntax, pk)
@@ -95,19 +90,20 @@ class JdbcRecordWriter(jdbcConfig: Config,
     }
   }
 
-  def flush(): Unit = withConnection(ds.getConnection) { conn =>
-    val pstmt = conn.prepareStatement(stmt)
-    unflushedRecords.foreach { r =>
-      valueSetter.setValues(r, pstmt)
-      pstmt.addBatch()
+  def flush(): Unit = synchronized {
+    withConnection(dataSource.getConnection) { conn =>
+      val pstmt = conn.prepareStatement(stmt)
+      unflushedRecords.foreach { r =>
+        valueSetter.setValues(r, pstmt)
+        pstmt.addBatch()
+      }
+      pstmt.executeBatch()
+      unflushedRecords.clear()
     }
-    pstmt.executeBatch()
-    unflushedRecords.clear()
   }
 
   def close(): Unit = {
     flush()
-    ds.close()
   }
 
 
