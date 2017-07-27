@@ -11,7 +11,7 @@ import scala.collection.JavaConverters._
   */
 private object H2Dialect extends JdbcDialect {
 
-  override def canHandle(url: String): Boolean = url.startsWith("jdbc:h2db")
+  override def canHandle(url: String): Boolean = url.startsWith("jdbc:h2")
 
   override def getJDBCType(dt: Schema): Option[JdbcType] = dt.getType match {
     case STRING => Option(JdbcType("CLOB", JDBCType.CLOB))

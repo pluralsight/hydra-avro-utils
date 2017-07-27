@@ -26,7 +26,8 @@ lazy val defaultSettings = Seq(
 
   ivyLoggingLevel in ThisBuild := UpdateLogging.Quiet,
   ivyScala := ivyScala.value map (_.copy(overrideScalaVersion = true)),
-  isSnapshot := true
+  isSnapshot := true,
+  coverageExcludedPackages := ".*Exception*"
 )
 
 lazy val moduleSettings = defaultSettings ++ Test.testSettings

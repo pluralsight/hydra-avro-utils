@@ -63,6 +63,7 @@ private[sql] object PostgresDialect extends JdbcDialect {
          |where $whereClause;""".stripMargin
 
     sql
+
   }
 
   private def bytesType(schema: Schema): Option[JdbcType] = {
@@ -70,7 +71,7 @@ private[sql] object PostgresDialect extends JdbcDialect {
       val lt = LogicalTypes.fromSchema(schema).asInstanceOf[Decimal]
       Option(JdbcType(s"DECIMAL(${lt.getPrecision},${lt.getScale})", JDBCType.DECIMAL))
     } else {
-      throw new IllegalArgumentException(s"Unsupported type in postgresql: ${schema.getType}")
+      Option(JdbcType(s"BYTEA", JDBCType.BINARY))
     }
   }
 

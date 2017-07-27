@@ -2,6 +2,7 @@ package hydra.avro.sql
 
 
 import java.math.{MathContext, RoundingMode}
+import java.nio.ByteBuffer
 import java.sql.{PreparedStatement, Timestamp}
 import java.time.{LocalDate, ZoneId}
 
@@ -70,7 +71,7 @@ private[sql] class AvroValueSetter(schema: Schema, dialect: JdbcDialect, dbSynta
       pstmt.setBigDecimal(idx, decimal)
     }
     else {
-      pstmt.setBytes(idx, obj.toString.getBytes)
+      pstmt.setBytes(idx, obj.asInstanceOf[ByteBuffer].array())
     }
   }
 

@@ -1,6 +1,7 @@
 package hydra.avro.sql
 
 import java.math.{MathContext, RoundingMode}
+import java.nio.ByteBuffer
 import java.sql._
 import java.time.{LocalDate, ZoneId}
 
@@ -95,7 +96,15 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       |       "fields": [
       |         {"name": "street", "type": "string"}
       |       ]}
-      |    }
+      |    },
+      |    {
+      |			"name": "bigNumber",
+      |			"type": "long"
+      |		},
+      |  {
+      |			"name": "byteField",
+      |			"type": "bytes"
+      |		}
       |	]
       |}
     """.stripMargin
@@ -110,6 +119,7 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       val decimal = new java.math.BigDecimal("0.2", ctx).setScale(2)
       val dt = LocalDate.ofEpochDay(1234).atStartOfDay(ZoneId.systemDefault()).toInstant.toEpochMilli
       val mockedStmt = mock[PreparedStatement]
+
       val connection = mock[Connection]
       val friends = Lists.newArrayList("friend1", "friend2")
       (mockedStmt.getConnection _).expects().returning(connection)
@@ -128,6 +138,8 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       (mockedStmt.setArray _).expects(11, mockArray)
       (mockedStmt.setString _).expects(12, "test1")
       (mockedStmt.setString _).expects(13, """{"street": "happy drive"}""")
+      (mockedStmt.setLong _).expects(14, 12342134223L)
+     // (mockedStmt.setBytes _).expects(15, "test".getBytes)
 
       val record = new GenericData.Record(schema)
       record.put("id", 1)
@@ -145,7 +157,10 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       val address = new GenericData.Record(schema.getField("address").schema)
       address.put("street", "happy drive")
       record.put("address", address)
+      record.put("bigNumber", 12342134223L)
+      record.put("byteField", ByteBuffer.wrap("test".getBytes))
       valueSetter.setValues(record, mockedStmt)
     }
   }
+
 }
