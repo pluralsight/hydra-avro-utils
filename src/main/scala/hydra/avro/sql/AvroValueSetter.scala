@@ -2,6 +2,7 @@ package hydra.avro.sql
 
 
 import java.math.{MathContext, RoundingMode}
+import java.nio.ByteBuffer
 import java.sql.{PreparedStatement, Timestamp}
 import java.time.{LocalDate, ZoneId}
 
@@ -30,7 +31,6 @@ private[sql] class AvroValueSetter(schema: Schema, dialect: JdbcDialect, dbSynta
   }
 
   private def setFieldValue(value: AnyRef, col: Column, schema: Schema, pstmt: PreparedStatement, idx: Int): Unit = {
-
     if (value == null) {
       pstmt.setNull(idx, col.dataType.targetSqlType.getVendorTypeNumber.intValue())
     } else {
@@ -54,6 +54,8 @@ private[sql] class AvroValueSetter(schema: Schema, dialect: JdbcDialect, dbSynta
           pstmt.setTimestamp(idx, new Timestamp(value.toString.toLong))
         case Schema.Type.LONG => pstmt.setLong(idx, value.toString.toLong)
         case Schema.Type.BYTES => byteValue(value, schema, pstmt, idx)
+        case Schema.Type.ENUM => pstmt.setString(idx, value.toString)
+        case Schema.Type.RECORD => pstmt.setString(idx, value.toString)
         case Schema.Type.NULL =>
           pstmt.setNull(idx, col.dataType.targetSqlType.getVendorTypeNumber.intValue())
         case _ => throw new IllegalArgumentException(s"Type ${schema.getType} is not supported.")
@@ -69,7 +71,7 @@ private[sql] class AvroValueSetter(schema: Schema, dialect: JdbcDialect, dbSynta
       pstmt.setBigDecimal(idx, decimal)
     }
     else {
-      pstmt.setBytes(idx, obj.toString.getBytes)
+      pstmt.setBytes(idx, obj.asInstanceOf[ByteBuffer].array())
     }
   }
 
@@ -78,7 +80,7 @@ private[sql] class AvroValueSetter(schema: Schema, dialect: JdbcDialect, dbSynta
 
     val aType = JdbcUtils.getJdbcType(schema.getElementType, dialect)
     val values = Lists.newArrayList(obj.iterator()).toArray
-    val arr = pstmt.getConnection.createArrayOf(aType.targetSqlType.getName,values )
+    val arr = pstmt.getConnection.createArrayOf(aType.targetSqlType.getName, values)
     pstmt.setArray(idx, arr)
   }
 

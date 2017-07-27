@@ -172,6 +172,116 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
         Column("username", JdbcType("TEXT", JDBCType.VARCHAR), true, avro.getField("username").schema(), None))
     }
 
+
+    it("throws exception if primary key doesn't exist") {
+      val schema =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "primary-key":"name",
+          |	"fields": [{
+          |			"name": "id",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin
+
+      val avro = new Schema.Parser().parse(schema)
+
+      intercept[IllegalArgumentException] {
+        JdbcUtils.getIdFields(avro) shouldBe None
+      }
+    }
+
+    it("returns a single primary key") {
+      val schema =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "primary-key":"id",
+          |	"fields": [{
+          |			"name": "id",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin
+
+      val avro = new Schema.Parser().parse(schema)
+
+      JdbcUtils.getIdFields(avro) shouldBe Seq(avro.getField("id"))
+    }
+
+    it("returns a composite primary key") {
+      val schema =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "primary-key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin
+
+      val avro = new Schema.Parser().parse(schema)
+
+      JdbcUtils.getIdFields(avro) shouldBe Seq(avro.getField("id1"), avro.getField("id2"))
+
+    }
+
+    it("returns CHAR for enums") {
+      val schema =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [
+          |		{
+          |			"name": "testEnum",
+          |			"type": {
+          |            "type": "enum",
+          |            "name": "test_type",
+          |            "symbols": ["test1", "test2"]
+          |        }
+          |		}
+          |	]
+          |}
+        """.stripMargin
+
+      val avro = new Schema.Parser().parse(schema)
+
+      JdbcUtils.getCommonJDBCType(avro.getField("testEnum").schema()).get shouldBe JdbcType("TEXT", VARCHAR)
+
+    }
+
     it("creates an avro schema") {
 
       val schema =
@@ -248,13 +358,86 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
         """.stripMargin
 
       val avro = new Schema.Parser().parse(schema)
-
-      val columns = "\"id\" INTEGER NOT NULL, \"username\" TEXT NOT NULL, \"rate\" DECIMAL(4,2) NOT NULL, " +
-        "\"rateb\" BYTE NOT NULL, \"active\" BIT(1) NOT NULL, \"score\" REAL NOT NULL, \"scored\" DOUBLE PRECISION" +
-        " NOT NULL, \"passwordHash\" BYTE NOT NULL, \"signupTimestamp\" TIMESTAMP NOT NULL, \"scoreLong\" " +
-        "BIGINT NOT NULL, \"signupDate\" DATE NOT NULL, \"justANumber\" INTEGER NOT NULL, \"testUnion\" TEXT "
+      val columns = "\"id\" INTEGER NOT NULL,\"username\" TEXT NOT NULL,\"rate\" DECIMAL(4,2) NOT NULL,\"rateb\" BYTE" +
+        " NOT NULL,\"active\" BIT(1) NOT NULL,\"score\" REAL NOT NULL,\"scored\" DOUBLE PRECISION NOT NULL," +
+        "\"passwordHash\" BYTE NOT NULL,\"signupTimestamp\" TIMESTAMP NOT NULL,\"scoreLong\" BIGINT NOT NULL," +
+        "\"signupDate\" DATE NOT NULL,\"justANumber\" INTEGER NOT NULL,\"testUnion\" TEXT "
 
       JdbcUtils.schemaString(avro, NoopDialect) shouldBe columns
+    }
+
+    it("Generates the correct ddl statement") {
+      val schema =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "primary-key":"id",
+          |	"fields": [
+          | {
+          |			"name": "id",
+          |			"type": "int"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": "string"
+          |		},
+          |  {
+          |			"name": "testEnum",
+          |			"type": {
+          |            "type": "enum",
+          |            "name": "test_type",
+          |            "symbols": ["test1", "test2"]
+          |        }
+          |		}
+          |	]
+          |}
+        """.stripMargin
+
+      val avro = new Schema.Parser().parse(schema)
+
+      val stmt = JdbcUtils.schemaString(avro, PostgresDialect)
+      stmt shouldBe "\"id\" INTEGER NOT NULL,\"username\" TEXT NOT NULL,\"testEnum\" TEXT NOT NULL PRIMARY KEY (\"id\")"
+    }
+
+    it("Generates the correct ddl statement with composite primary  keys") {
+      val schema =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "primary-key":"id1,id2",
+          |	"fields": [
+          | {
+          |			"name": "id1",
+          |			"type": "int"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": "string"
+          |		},
+          |  {
+          |			"name": "testEnum",
+          |			"type": {
+          |            "type": "enum",
+          |            "name": "test_type",
+          |            "symbols": ["test1", "test2"]
+          |        }
+          |		}
+          |	]
+          |}
+        """.stripMargin
+
+      val avro = new Schema.Parser().parse(schema)
+      val stmt = JdbcUtils.schemaString(avro, PostgresDialect)
+      stmt shouldBe "\"id1\" INTEGER NOT NULL,\"id2\" INTEGER NOT NULL,\"username\" TEXT NOT NULL," +
+        "\"testEnum\" TEXT NOT NULL PRIMARY KEY (\"id1\",\"id2\")"
     }
   }
 }

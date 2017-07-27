@@ -83,6 +83,7 @@ class AggregatedDialectSpec extends Matchers with FunSpecLike {
       |}
     """.stripMargin
 
+  val avro = new Schema.Parser().parse(schema)
 
   describe("The Aggregate dialect") {
 
@@ -94,9 +95,44 @@ class AggregatedDialectSpec extends Matchers with FunSpecLike {
       dialect.canHandle("jdbc:db2") shouldBe false
     }
 
+    it("builds upserts") {
+
+      val schema = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id",
+          |			"type": "int"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": "string"
+          |		},
+          |		{
+          |			"name": "active",
+          |			"type": "boolean"
+          |		}
+          |	]
+          |}
+        """.stripMargin)
+
+
+      val dialect = new AggregatedDialect(List(PostgresDialect, new JdbcDialect() {
+        override def canHandle(url: String): Boolean = url.startsWith("jdbc:postgresql")
+      }))
+
+      val upsert ="""insert into table ("id","username","active") values (?,?,?)
+          |on conflict (id)
+          |do update set ("username","active") = (?,?)
+          |where table.id=?;""".stripMargin
+      dialect.buildUpsert("table", schema, UnderscoreSyntax, Seq(schema.getField("id"))) shouldBe upsert
+    }
+
     it("converts a schema") {
       val dialect = new AggregatedDialect(List(PostgresDialect, DB2Dialect))
-      val avro = new Schema.Parser().parse(schema)
       dialect.getJDBCType(avro.getField("username").schema()).get shouldBe JdbcType("TEXT", CHAR)
       intercept[IllegalArgumentException] {
         dialect.getJDBCType(avro.getField("passwordHash").schema()).get shouldBe JdbcType("BYTEA", BINARY)

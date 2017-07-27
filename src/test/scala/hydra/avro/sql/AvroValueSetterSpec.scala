@@ -1,7 +1,8 @@
 package hydra.avro.sql
 
 import java.math.{MathContext, RoundingMode}
-import java.sql.{Connection, Date, PreparedStatement, Timestamp}
+import java.nio.ByteBuffer
+import java.sql._
 import java.time.{LocalDate, ZoneId}
 
 import com.google.common.collect.Lists
@@ -80,6 +81,29 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       |				"type": "array",
       |				"items": "string"
       |			}
+      |		},
+      |  {
+      |    "name": "testEnum",
+      |    "type": {
+      |        "type": "enum",
+      |        "name": "enum_type",
+      |        "symbols": ["test1", "test2"]
+      |    }
+      |  },
+      |      {"name": "address", "type":
+      |      {"type": "record",
+      |       "name": "AddressRecord",
+      |       "fields": [
+      |         {"name": "street", "type": "string"}
+      |       ]}
+      |    },
+      |    {
+      |			"name": "bigNumber",
+      |			"type": "long"
+      |		},
+      |  {
+      |			"name": "byteField",
+      |			"type": "bytes"
       |		}
       |	]
       |}
@@ -95,6 +119,7 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       val decimal = new java.math.BigDecimal("0.2", ctx).setScale(2)
       val dt = LocalDate.ofEpochDay(1234).atStartOfDay(ZoneId.systemDefault()).toInstant.toEpochMilli
       val mockedStmt = mock[PreparedStatement]
+
       val connection = mock[Connection]
       val friends = Lists.newArrayList("friend1", "friend2")
       (mockedStmt.getConnection _).expects().returning(connection)
@@ -111,6 +136,10 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       (mockedStmt.setString _).expects(9, "test")
       (mockedStmt.setNull(_: Int, _: Int)).expects(10, java.sql.Types.CHAR)
       (mockedStmt.setArray _).expects(11, mockArray)
+      (mockedStmt.setString _).expects(12, "test1")
+      (mockedStmt.setString _).expects(13, """{"street": "happy drive"}""")
+      (mockedStmt.setLong _).expects(14, 12342134223L)
+     // (mockedStmt.setBytes _).expects(15, "test".getBytes)
 
       val record = new GenericData.Record(schema)
       record.put("id", 1)
@@ -124,7 +153,14 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       record.put("friends", new GenericData.Array[String](schema.getField("friends").schema(), friends))
       record.put("testUnion", "test")
       record.put("testNullUnion", null)
+      record.put("testEnum", "test1")
+      val address = new GenericData.Record(schema.getField("address").schema)
+      address.put("street", "happy drive")
+      record.put("address", address)
+      record.put("bigNumber", 12342134223L)
+      record.put("byteField", ByteBuffer.wrap("test".getBytes))
       valueSetter.setValues(record, mockedStmt)
     }
   }
+
 }
