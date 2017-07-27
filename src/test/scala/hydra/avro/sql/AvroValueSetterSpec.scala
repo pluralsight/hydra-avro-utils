@@ -139,7 +139,7 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       (mockedStmt.setString _).expects(12, "test1")
       (mockedStmt.setString _).expects(13, """{"street": "happy drive"}""")
       (mockedStmt.setLong _).expects(14, 12342134223L)
-     // (mockedStmt.setBytes _).expects(15, "test".getBytes)
+      (mockedStmt.setBytes _).expects(15, *) //todo: how to verify the contents of an array in scala mock?
 
       val record = new GenericData.Record(schema)
       record.put("id", 1)
