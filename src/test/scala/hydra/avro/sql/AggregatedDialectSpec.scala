@@ -124,7 +124,8 @@ class AggregatedDialectSpec extends Matchers with FunSpecLike {
         override def canHandle(url: String): Boolean = url.startsWith("jdbc:postgresql")
       }))
 
-      val upsert ="""insert into table ("id","username","active") values (?,?,?)
+      val upsert =
+        """insert into table ("id","username","active") values (?,?,?)
           |on conflict (id)
           |do update set ("username","active") = (?,?)
           |where table.id=?;""".stripMargin
@@ -134,9 +135,8 @@ class AggregatedDialectSpec extends Matchers with FunSpecLike {
     it("converts a schema") {
       val dialect = new AggregatedDialect(List(PostgresDialect, DB2Dialect))
       dialect.getJDBCType(avro.getField("username").schema()).get shouldBe JdbcType("TEXT", CHAR)
-      intercept[IllegalArgumentException] {
-        dialect.getJDBCType(avro.getField("passwordHash").schema()).get shouldBe JdbcType("BYTEA", BINARY)
-      }
+
+      dialect.getJDBCType(avro.getField("passwordHash").schema()).get shouldBe JdbcType("BYTEA", BINARY)
 
       val dialect1 = new AggregatedDialect(List(DB2Dialect, PostgresDialect))
       dialect1.getJDBCType(avro.getField("username").schema()).get shouldBe JdbcType("CLOB", CLOB)
