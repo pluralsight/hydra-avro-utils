@@ -2,6 +2,7 @@ package hydra.avro.sql
 
 import java.sql.JDBCType
 
+import hydra.avro.util.AvroUtils
 import org.apache.avro.LogicalTypes.Decimal
 import org.apache.avro.Schema.Type.{BYTES, UNION}
 import org.apache.avro.Schema.{Field, Type}
@@ -12,7 +13,7 @@ import org.apache.avro.{LogicalTypes, Schema}
   */
 private[sql] object PostgresDialect extends JdbcDialect {
 
-  override val jsonPlaceholder = "to_json(?)"
+  override val jsonPlaceholder = "to_json(?::TEXT)"
 
   override def canHandle(url: String): Boolean = url.startsWith("jdbc:postgresql")
 
@@ -46,19 +47,31 @@ private[sql] object PostgresDialect extends JdbcDialect {
     }
   }
 
-
-  override def buildUpsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Seq[Field]): String = {
+  override def upsertFields(schema: Schema): Seq[Field] = {
     import scala.collection.JavaConverters._
     val fields = schema.getFields.asScala
-    val columns = fields.map(f => quoteIdentifier(dbs.format(f.name))).mkString(",")
+    val idFields = AvroUtils.getPrimaryKeys(schema)
+    val updateSchema = if (idFields.isEmpty) Seq.empty else fields -- idFields
+    fields ++ updateSchema ++ idFields
+  }
+
+  override def buildUpsert(table: String, schema: Schema, dbs: DbSyntax): String = {
+    import scala.collection.JavaConverters._
+
+    def formatColName(col: Field) = quoteIdentifier(dbs.format(col.name()))
+
+    val idFields = AvroUtils.getPrimaryKeys(schema)
+    val fields = schema.getFields.asScala
+    val columns = fields.map(formatColName).mkString(",")
     val placeholders = parameterize(fields)
     val updateSchema = fields -- idFields
-    val updateColumns = updateSchema.map(f => quoteIdentifier(f.name)).mkString(",")
+    val updateColumns = updateSchema.map(formatColName).mkString(",")
     val updatePlaceholders = parameterize(updateSchema)
-    val whereClause = idFields.map(c => s"$table.${c.name()}=?").mkString(" and ")
+    val whereClause = idFields.map(c => s"$table.${formatColName(c)}=?").mkString(" and ")
+
     val sql =
       s"""insert into $table ($columns) values (${placeholders.mkString(",")})
-         |on conflict (${idFields.map(_.name).mkString(",")})
+         |on conflict (${idFields.map(formatColName).mkString(",")})
          |do update set ($updateColumns) = (${updatePlaceholders.mkString(",")})
          |where $whereClause;""".stripMargin
 

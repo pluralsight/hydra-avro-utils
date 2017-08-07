@@ -89,15 +89,28 @@ abstract class JdbcDialect extends Serializable {
     * Optional operation; default implementation throws a UnsupportedOperationException
     */
   @throws[UnsupportedOperationException]
-  def buildUpsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Seq[Field]): String = {
+  def buildUpsert(table: String, schema: Schema, dbs: DbSyntax): String = {
+    throw new UnsupportedOperationException("Upserts are not supported by this dialect.")
+  }
+
+  /**
+    * Returns the upsert fields to be used in the prepared statement. These should match in size and order
+    * the sql statement that gets returned from buildUpsert.
+    *
+    * Optional operation; default implementation throws a UnsupportedOperationException
+    */
+  @throws[UnsupportedOperationException]
+  def upsertFields(schema: Schema): Seq[Field] = {
     throw new UnsupportedOperationException("Upserts are not supported by this dialect.")
   }
 
   /**
     * Convenience method that calls the underlying buildUpsertStatement method if the id exists.
+    * It will add a "keys" property to the schema if the ids passed are not empty.
     */
-  def upsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Seq[Field]): String = {
-    if (idFields.isEmpty) insertStatement(table, schema, dbs) else buildUpsert(table, schema, dbs, idFields)
+  def upsert(table: String, schema: Schema, dbs: DbSyntax): String = {
+    Option(schema.getProp("key")).map(_ => buildUpsert(table, schema, dbs))
+      .getOrElse(insertStatement(table, schema, dbs))
   }
 
   protected def parameterize(fields: Seq[Schema.Field]): Seq[String] = {
@@ -155,7 +168,7 @@ object JdbcDialects {
 private object NoopDialect extends JdbcDialect {
   override def canHandle(url: String): Boolean = true
 
-  override def buildUpsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Seq[Field]): String = {
+  override def buildUpsert(table: String, schema: Schema, dbs: DbSyntax): String = {
     throw new UnsupportedOperationException("Not supported.")
   }
 }

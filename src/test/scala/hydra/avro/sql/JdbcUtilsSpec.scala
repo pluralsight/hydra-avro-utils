@@ -173,88 +173,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
     }
 
 
-    it("throws exception if primary key doesn't exist") {
-      val schema =
-        """
-          |{
-          |	"type": "record",
-          |	"name": "User",
-          |	"namespace": "hydra",
-          | "primary-key":"name",
-          |	"fields": [{
-          |			"name": "id",
-          |			"type": "int",
-          |			"doc": "doc"
-          |		},
-          |		{
-          |			"name": "username",
-          |			"type": ["null", "string"]
-          |		}
-          |	]
-          |}""".stripMargin
 
-      val avro = new Schema.Parser().parse(schema)
-
-      intercept[IllegalArgumentException] {
-        JdbcUtils.getIdFields(avro) shouldBe None
-      }
-    }
-
-    it("returns a single primary key") {
-      val schema =
-        """
-          |{
-          |	"type": "record",
-          |	"name": "User",
-          |	"namespace": "hydra",
-          | "primary-key":"id",
-          |	"fields": [{
-          |			"name": "id",
-          |			"type": "int",
-          |			"doc": "doc"
-          |		},
-          |		{
-          |			"name": "username",
-          |			"type": ["null", "string"]
-          |		}
-          |	]
-          |}""".stripMargin
-
-      val avro = new Schema.Parser().parse(schema)
-
-      JdbcUtils.getIdFields(avro) shouldBe Seq(avro.getField("id"))
-    }
-
-    it("returns a composite primary key") {
-      val schema =
-        """
-          |{
-          |	"type": "record",
-          |	"name": "User",
-          |	"namespace": "hydra",
-          | "primary-key":"id1,id2",
-          |	"fields": [{
-          |			"name": "id1",
-          |			"type": "int",
-          |			"doc": "doc"
-          |		},
-          |  {
-          |			"name": "id2",
-          |			"type": "int",
-          |			"doc": "doc"
-          |		},
-          |		{
-          |			"name": "username",
-          |			"type": ["null", "string"]
-          |		}
-          |	]
-          |}""".stripMargin
-
-      val avro = new Schema.Parser().parse(schema)
-
-      JdbcUtils.getIdFields(avro) shouldBe Seq(avro.getField("id1"), avro.getField("id2"))
-
-    }
 
     it("returns CHAR for enums") {
       val schema =
@@ -373,7 +292,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "primary-key":"id",
+          | "key":"id",
           |	"fields": [
           | {
           |			"name": "id",
@@ -398,7 +317,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
       val avro = new Schema.Parser().parse(schema)
 
       val stmt = JdbcUtils.schemaString(avro, PostgresDialect)
-      stmt shouldBe "\"id\" INTEGER NOT NULL,\"username\" TEXT NOT NULL,\"testEnum\" TEXT NOT NULL PRIMARY KEY (\"id\")"
+      stmt shouldBe "\"id\" INTEGER NOT NULL,\"username\" TEXT NOT NULL,\"testEnum\" TEXT NOT NULL,CONSTRAINT User_PK PRIMARY KEY (\"id\")"
     }
 
     it("Generates the correct ddl statement with composite primary  keys") {
@@ -408,7 +327,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "primary-key":"id1,id2",
+          | "key":"id1,id2",
           |	"fields": [
           | {
           |			"name": "id1",
@@ -437,7 +356,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
       val avro = new Schema.Parser().parse(schema)
       val stmt = JdbcUtils.schemaString(avro, PostgresDialect)
       stmt shouldBe "\"id1\" INTEGER NOT NULL,\"id2\" INTEGER NOT NULL,\"username\" TEXT NOT NULL," +
-        "\"testEnum\" TEXT NOT NULL PRIMARY KEY (\"id1\",\"id2\")"
+        "\"testEnum\" TEXT NOT NULL,CONSTRAINT User_PK PRIMARY KEY (\"id1\",\"id2\")"
     }
   }
 }

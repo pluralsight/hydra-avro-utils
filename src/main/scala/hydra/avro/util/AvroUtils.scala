@@ -15,6 +15,9 @@
 
 package hydra.avro.util
 
+import org.apache.avro.Schema
+import org.apache.avro.Schema.Field
+
 
 /**
   * Created by alexsilva on 12/7/15.
@@ -33,6 +36,28 @@ object AvroUtils {
     pattern findFirstIn name match {
       case Some(str) => "_" + name.substring(1)
       case None => name
+    }
+  }
+
+  def getField(name: String, schema: Schema): Field = {
+    Option(schema.getField(name))
+      .getOrElse(throw new IllegalArgumentException(s"Field $name is not in schema."))
+  }
+
+  /**
+    * Returns the primary keys (if any) defined for that schema.
+    *
+    * Primary keys are defined by adding a property named "key" to the avro record,
+    * which can contain a single field name
+    * or a comma delimmited list of field names (for composite primary keys.)
+    *
+    * @param schema
+    * @return An empty sequence if no primary key(s) are defined.
+    */
+  def getPrimaryKeys(schema: Schema): Seq[Field] = {
+    Option(schema.getProp("key")).map(_.split(",")) match {
+      case Some(ids) => ids.map(getField(_, schema))
+      case None => Seq.empty
     }
   }
 }

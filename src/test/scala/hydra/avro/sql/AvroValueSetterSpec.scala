@@ -11,6 +11,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.{FunSpecLike, Matchers}
+import scala.collection.JavaConverters._
 
 /**
   * Created by alexsilva on 5/4/17.
@@ -111,9 +112,9 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
 
   val schema = new Schema.Parser().parse(schemaStr)
 
-  val valueSetter = new AvroValueSetter(schema, PostgresDialect, UnderscoreSyntax)
+  val valueSetter = new AvroValueSetter(schema.getFields().asScala, PostgresDialect, UnderscoreSyntax)
   describe("The AvroValueSetter") {
-    it("sets values") {
+    it("sets values in inserts") {
       val ts = System.currentTimeMillis
       val ctx = new MathContext(4, RoundingMode.HALF_EVEN)
       val decimal = new java.math.BigDecimal("0.2", ctx).setScale(2)

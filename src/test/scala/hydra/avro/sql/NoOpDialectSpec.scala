@@ -15,7 +15,7 @@ class NoOpDialectSpec extends Matchers with FunSpecLike {
 
     it("does not upsert") {
       intercept[UnsupportedOperationException] {
-        NoopDialect.buildUpsert("table", Schema.create(Schema.Type.NULL), UnderscoreSyntax, Seq.empty)
+        NoopDialect.buildUpsert("table", Schema.create(Schema.Type.NULL), UnderscoreSyntax)
       }
     }
 

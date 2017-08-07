@@ -103,6 +103,8 @@ class AggregatedDialectSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
+          | "key":"id",
+          |
           |	"fields": [{
           |			"name": "id",
           |			"type": "int"
@@ -124,12 +126,14 @@ class AggregatedDialectSpec extends Matchers with FunSpecLike {
         override def canHandle(url: String): Boolean = url.startsWith("jdbc:postgresql")
       }))
 
+      println(dialect.buildUpsert("table", schema, UnderscoreSyntax))
+
       val upsert =
         """insert into table ("id","username","active") values (?,?,?)
-          |on conflict (id)
+          |on conflict ("id")
           |do update set ("username","active") = (?,?)
-          |where table.id=?;""".stripMargin
-      dialect.buildUpsert("table", schema, UnderscoreSyntax, Seq(schema.getField("id"))) shouldBe upsert
+          |where table."id"=?;""".stripMargin
+      dialect.buildUpsert("table", schema, UnderscoreSyntax) shouldBe upsert
     }
 
     it("converts a schema") {

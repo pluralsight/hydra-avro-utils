@@ -15,6 +15,7 @@ class H2DialectSpec extends Matchers with FunSpecLike {
       |	"type": "record",
       |	"name": "User",
       |	"namespace": "hydra",
+      | "key":"id",
       |	"fields": [{
       |			"name": "id",
       |			"type": "int"
@@ -50,7 +51,7 @@ class H2DialectSpec extends Matchers with FunSpecLike {
 
     it("returns upserts") {
       val upsert = "merge into table (\"id\",\"username\",\"active\") key(\"id\") values (?,?,?);"
-      H2Dialect.upsert("table", avro, UnderscoreSyntax, Seq(avro.getField("id"))) shouldBe upsert
+      H2Dialect.upsert("table", avro, UnderscoreSyntax) shouldBe upsert
     }
   }
 }

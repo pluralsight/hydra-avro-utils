@@ -2,8 +2,9 @@ package hydra.avro.sql
 
 import java.sql.{Connection, JDBCType}
 
+import hydra.avro.util.AvroUtils
 import org.apache.avro.LogicalTypes.Decimal
-import org.apache.avro.Schema.Type
+import org.apache.avro.Schema.{Field, Type}
 import org.apache.avro.Schema.Type._
 import org.apache.avro.{LogicalTypes, Schema}
 import org.slf4j.LoggerFactory
@@ -113,10 +114,10 @@ private[avro] object JdbcUtils {
   /**
     * Returns true if the table already exists in the JDBC database.
     */
-  def tableExists(conn: Connection, url: String, table: String): Boolean = {
-    val dialect = JdbcDialects.get(url)
+  def tableExists(conn: Connection, dialect: JdbcDialect, table: String): Boolean = {
     Try {
-      val statement = conn.prepareStatement(dialect.getTableExistsQuery(table))
+      val sql = dialect.getTableExistsQuery(table)
+      val statement = conn.prepareStatement(sql)
       try {
         statement.executeQuery()
       } finally {
@@ -132,19 +133,15 @@ private[avro] object JdbcUtils {
       val nullable = if (isNullableUnion(field.schema())) "" else "NOT NULL"
       s"$name $typ $nullable"
     }
-    val pkSeq = getIdFields(schema).map(f => dialect.quoteIdentifier(dbSyntax.format(f.name())))
-    val pkStmt = if (!pkSeq.isEmpty) s" PRIMARY KEY (${pkSeq.mkString(",")})" else ""
+    val pkSeq = AvroUtils.getPrimaryKeys(schema).map(f => dialect.quoteIdentifier(dbSyntax.format(f.name())))
+    val pkStmt = if (!pkSeq.isEmpty) s",CONSTRAINT ${schema.getName}_PK PRIMARY KEY (${pkSeq.mkString(",")})" else ""
     val ddl = s"${schemaStr.mkString(",")}${pkStmt}"
     ddl
   }
 
 
-  def columns(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax = NoOpSyntax): Seq[Column] = {
-    columnMap(schema, dialect, dbSyntax).values.toSeq
-  }
-
-  def columnMap(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax = NoOpSyntax): Map[Schema.Field, Column] = {
-    schema.getFields.asScala.map { field =>
+  def columnMap(fields: Seq[Field], dialect: JdbcDialect, dbSyntax: DbSyntax): Map[Schema.Field, Column] = {
+    fields.map { field =>
       val name = dbSyntax.format(field.name)
       val typ = getJdbcType(field.schema(), dialect)
       val nullable = isNullableUnion(field.schema())
@@ -153,19 +150,15 @@ private[avro] object JdbcUtils {
       .toMap
   }
 
-  def columnNames(schema: Schema, dbSyntax: DbSyntax = NoOpSyntax): Seq[String] = {
-    schema.getFields.asScala.map(f => dbSyntax.format(f.name()))
+  def columns(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax = NoOpSyntax): Seq[Column] = {
+    columnMap(schema, dialect, dbSyntax).values.toSeq
   }
 
-  def getIdFields(schema: Schema): Seq[Schema.Field] = {
-    Option(schema.getProp("primary-key")).map(_.split(",")) match {
-      case Some(ids) =>
-        ids.map { id =>
-          Option(schema.getField(id))
-            .getOrElse(throw new IllegalArgumentException(s"Field $id is not in schema."))
-        }
-      case None => Seq.empty
-    }
+  def columnMap(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax = NoOpSyntax): Map[Schema.Field, Column] =
+    columnMap(schema.getFields.asScala, dialect, dbSyntax)
+
+  def columnNames(schema: Schema, dbSyntax: DbSyntax = NoOpSyntax): Seq[String] = {
+    schema.getFields.asScala.map(f => dbSyntax.format(f.name()))
   }
 
   def getJdbcType(schema: Schema, dialect: JdbcDialect): JdbcType = {

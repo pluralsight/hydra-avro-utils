@@ -127,7 +127,7 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
     }
 
     it("returns the right placeholder for json") {
-      PostgresDialect.jsonPlaceholder shouldBe "to_json(?)"
+      PostgresDialect.jsonPlaceholder shouldBe "to_json(?::TEXT)"
     }
 
     it("works with general sql commands") {
@@ -143,7 +143,7 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "primary-key":"id",
+          | "key":"id",
           |	"fields": [{
           |			"name": "id",
           |			"type": "int",
@@ -166,7 +166,7 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
       val avro = new Schema.Parser().parse(schema)
 
       PostgresDialect.insertStatement("table", avro,
-        UnderscoreSyntax) shouldBe "INSERT INTO table (\"id\",\"username\",\"address\") VALUES (?,?,to_json(?))"
+        UnderscoreSyntax) shouldBe "INSERT INTO table (\"id\",\"username\",\"address\") VALUES (?,?,to_json(?::TEXT))"
     }
 
     it("builds an upsert") {
@@ -177,7 +177,7 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "primary-key":"id",
+          | "key":"id",
           |	"fields": [{
           |			"name": "id",
           |			"type": "int",
@@ -199,14 +199,13 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
 
       val avro = new Schema.Parser().parse(schema)
 
-      val idFields = JdbcUtils.getIdFields(avro)
+      val stmt = PostgresDialect.buildUpsert("table", avro, UnderscoreSyntax)
 
-      val stmt = PostgresDialect.buildUpsert("table", avro, UnderscoreSyntax, idFields)
       val expected =
-        """insert into table ("id","username","address") values (?,?,to_json(?))
-          |on conflict (id)
-          |do update set ("username","address") = (?,to_json(?))
-          |where table.id=?;""".stripMargin
+        """insert into table ("id","username","address") values (?,?,to_json(?::TEXT))
+          |on conflict ("id")
+          |do update set ("username","address") = (?,to_json(?::TEXT))
+          |where table."id"=?;""".stripMargin
 
       stmt shouldBe expected
     }
@@ -219,7 +218,7 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "primary-key":"id1,id2",
+          | "key":"id1,id2",
           |	"fields": [{
           |			"name": "id1",
           |			"type": "int",
@@ -239,16 +238,76 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
 
       val avro = new Schema.Parser().parse(schema)
 
-      val idFields = JdbcUtils.getIdFields(avro)
+      val stmt = PostgresDialect.buildUpsert("table", avro, UnderscoreSyntax)
 
-      val stmt = PostgresDialect.buildUpsert("table", avro, UnderscoreSyntax, idFields)
       val expected =
         """insert into table ("id1","id2","username") values (?,?,?)
-          |on conflict (id1,id2)
+          |on conflict ("id1","id2")
           |do update set ("username") = (?)
-          |where table.id1=? and table.id2=?;""".stripMargin
+          |where table."id1"=? and table."id2"=?;""".stripMargin
 
       stmt shouldBe expected
+    }
+
+    it("returns the correct field list for inserts") {
+      val schema =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin
+
+      val avro = new Schema.Parser().parse(schema)
+
+      PostgresDialect.upsertFields(avro) shouldBe Seq(avro.getField("id1"), avro.getField("id2"),
+        avro.getField("username"))
+    }
+
+    it("returns the correct field list for upserts") {
+      val schema =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin
+
+      val avro = new Schema.Parser().parse(schema)
+
+      PostgresDialect.upsertFields(avro) shouldBe Seq(avro.getField("id1"), avro.getField("id2"),
+        avro.getField("username"), avro.getField("username"), avro.getField("id1"), avro.getField("id2"))
     }
   }
 }

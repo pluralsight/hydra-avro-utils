@@ -6,12 +6,14 @@ import com.google.common.cache.{RemovalListener, RemovalNotification}
 import com.zaxxer.hikari.HikariDataSource
 import hydra.avro.io.SaveMode.SaveMode
 import hydra.avro.io.{RecordWriter, SaveMode}
+import hydra.avro.util.AvroUtils
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker
 import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker.NO_OP_CHECKER
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{AvroRuntimeException, Schema}
 import org.slf4j.LoggerFactory
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.{Failure, Success}
 
@@ -24,6 +26,17 @@ import scala.util.{Failure, Success}
   *
   * If the primary keys are provided as a constructor argument, it overrides anything that
   * may have been provided by the schema.
+  *
+  * @param dataSource           The datasource to be used
+  * @param schema               The schema to verify/create the underlying table from.
+  * @param mode                 See [hydra.avro.io.SaveMode]
+  * @param dialect              The jdbc dialect to use.
+  * @param compatibilityChecker Which compatibility level to check for incoming records.
+  *                             (See Confluent Schema Registry.) Defaults to NO_OP_CHECKER.
+  * @param dbSyntax             THe database syntax to use.
+  * @param batchSize            The commit batch size.
+  * @param table                The tabla name; if None the name of the record in the avro schema is used.
+  * @param database             The database name.
   */
 class JdbcRecordWriter(val dataSource: HikariDataSource,
                        val schema: Schema,
@@ -40,8 +53,6 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
   private val tableName = table.getOrElse(schema.getName)
 
   private val tableId = TableIdentifier(tableName, database)
-
-  private val valueSetter = new AvroValueSetter(schema, dialect, dbSyntax)
 
   private val unflushedRecords = new mutable.ArrayBuffer[GenericRecord]()
 
@@ -71,11 +82,14 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
     }
   }
 
-  // private val constPk: Option[Seq[Schema.Field]] = primaryKeys.map(_.split(",").map(schema.getField))
-  // private val pk: Seq[Schema.Field] = constPk.getOrElse(JdbcUtils.getIdFields(schema))
-  private val pk = JdbcUtils.getIdFields(schema)
+  private val pk = AvroUtils.getPrimaryKeys(schema)
   private val name = tableObj.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
-  private val stmt = dialect.upsert(dbSyntax.format(name), schema, dbSyntax, pk)
+  private val stmt = dialect.upsert(dbSyntax.format(name), schema, dbSyntax)
+
+  //public for testing
+  val schemaFields = if (pk.isEmpty) schema.getFields.asScala else dialect.upsertFields(schema)
+
+  private val valueSetter = new AvroValueSetter(schemaFields, dialect, dbSyntax)
 
   def write(record: GenericRecord): Unit = {
     if (!compatibilityChecker.isCompatible(schema, record.getSchema)) {
@@ -97,23 +111,19 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
         valueSetter.setValues(r, pstmt)
         pstmt.addBatch()
       }
-      pstmt.executeBatch()
+      try {
+        pstmt.executeBatch()
+      }
+      catch {
+        case e: BatchUpdateException => e.getNextException().printStackTrace(); throw e
+        case e: Exception => throw e
+      }
       unflushedRecords.clear()
     }
   }
 
   def close(): Unit = {
     flush()
-  }
-
-
-  private def executeBatch(stmt: PreparedStatement) = {
-    try {
-      stmt.executeBatch()
-    }
-    catch {
-      case e: BatchUpdateException => e.getNextException().printStackTrace()
-    }
   }
 }
 

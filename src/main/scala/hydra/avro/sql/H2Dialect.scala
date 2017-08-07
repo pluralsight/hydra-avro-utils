@@ -2,8 +2,10 @@ package hydra.avro.sql
 
 import java.sql.JDBCType
 
+import hydra.avro.util.AvroUtils
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Type._
+
 import scala.collection.JavaConverters._
 
 /**
@@ -19,8 +21,9 @@ private object H2Dialect extends JdbcDialect {
     case _ => None
   }
 
-  override def buildUpsert(table: String, schema: Schema, dbs: DbSyntax, idFields: Seq[Schema.Field]): String = {
+  override def buildUpsert(table: String, schema: Schema, dbs: DbSyntax): String = {
 
+    val idFields = AvroUtils.getPrimaryKeys(schema)
     val fields = schema.getFields.asScala
     val columns = fields.map(c => quoteIdentifier(dbs.format(c.name))).mkString(",")
     val placeholders = fields.map(_ => "?").mkString(",")

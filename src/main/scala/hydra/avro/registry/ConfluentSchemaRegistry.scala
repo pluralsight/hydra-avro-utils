@@ -11,6 +11,8 @@ import scala.collection.JavaConverters._
   */
 trait ConfluentSchemaRegistry extends SchemaRegistryComponent {
 
+  def config: Config
+
   val registryClient: SchemaRegistryClient = ConfluentSchemaRegistry.fromConfig(config)
   val registryUrl: String = ConfluentSchemaRegistry.registryUrl(config)
 
@@ -49,4 +51,4 @@ object ConfluentSchemaRegistry {
 
 
 // A wrapper class for Java clients
-class ConfluentSchemaRegistryWrapper(val config:Config) extends ConfluentSchemaRegistry
+class ConfluentSchemaRegistryWrapper(val config: Config) extends ConfluentSchemaRegistry

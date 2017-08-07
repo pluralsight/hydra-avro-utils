@@ -52,9 +52,9 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
 
   override def tableExists(name: TableIdentifier): Boolean = synchronized {
     withConnection(ds.getConnection) { conn =>
-      val db = formatDatabaseName(name.schema.getOrElse(""))
-      val table = formatTableName(name.table)
-      JdbcUtils.tableExists(conn, db, table)
+      val db = name.schema.map(d => formatDatabaseName(d) + ".")
+      val table = db.getOrElse("") + formatTableName(name.table)
+      JdbcUtils.tableExists(conn, dialect, table)
     }
   }
 
@@ -64,8 +64,9 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
       val table = formatTableName(tableId.table)
       tableId.schema.foreach(requireSchemaExists(_, conn))
       val db = tableId.schema.getOrElse("")
-      Try(if (JdbcUtils.tableExists(conn, db, table)) Success(true) else Failure(new NoSuchTableException(db, table)))
-        .flatMap(_ => doGetTable(tableId.schema, table, conn))
+      val exists = JdbcUtils.tableExists(conn, dialect, table)
+      if (exists) doGetTable(tableId.schema, table, conn) else Failure(new NoSuchTableException(db, table))
+
     }
   }
 

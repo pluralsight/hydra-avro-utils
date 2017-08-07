@@ -9,22 +9,21 @@ import java.time.{LocalDate, ZoneId}
 import com.google.common.collect.Lists
 import hydra.avro.sql.JdbcUtils.isLogicalType
 import org.apache.avro.LogicalTypes.Decimal
+import org.apache.avro.Schema.Field
 import org.apache.avro.Schema.Type.LONG
 import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.apache.avro.{AvroRuntimeException, LogicalTypes, Schema}
-
-import scala.collection.JavaConverters._
 
 /**
   * Created by alexsilva on 7/12/17.
   */
 //scalastyle:off
-private[sql] class AvroValueSetter(schema: Schema, dialect: JdbcDialect, dbSyntax: DbSyntax) {
+private[sql] class AvroValueSetter(fields: Seq[Field], dialect: JdbcDialect, dbSyntax: DbSyntax) {
 
-  val columns = JdbcUtils.columnMap(schema, dialect, dbSyntax)
+  val columns = JdbcUtils.columnMap(fields, dialect, dbSyntax)
 
   def setValues(record: GenericRecord, stmt: PreparedStatement) = {
-    schema.getFields.asScala.zipWithIndex.foreach {
+    fields.zipWithIndex.foreach {
       case (f, idx) =>
         setFieldValue(record.get(f.name()), columns(f), f.schema(), stmt, idx + 1)
     }

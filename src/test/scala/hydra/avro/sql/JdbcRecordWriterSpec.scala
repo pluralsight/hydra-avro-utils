@@ -12,7 +12,7 @@ import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 /**
   * Created by alexsilva on 5/4/17.
   */
-class AvroWriterSpec extends Matchers with FunSpecLike with BeforeAndAfterAll with JdbcHelper {
+class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfterAll with JdbcHelper {
 
   import scala.collection.JavaConverters._
 
@@ -110,6 +110,11 @@ class AvroWriterSpec extends Matchers with FunSpecLike with BeforeAndAfterAll wi
         Seq(rs.getInt(1), rs.getString(2)) shouldBe Seq(1, "alex")
       }
       writer.close()
+    }
+
+    it("calls the dialects upsert functionality") {
+      val writer = new JdbcRecordWriter(ds, schema, dialect = PostgresDialect, batchSize = 1, mode = SaveMode.Append)
+      writer.schemaFields shouldBe PostgresDialect.upsertFields(schema)
     }
 
     it("flushes") {
