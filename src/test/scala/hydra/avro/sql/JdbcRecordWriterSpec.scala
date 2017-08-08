@@ -69,7 +69,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
           |		}
           |	]
           |}""".stripMargin
-      catalog.createTable(Table("tester", schema))
+      catalog.createOrAlterTable(Table("tester", schema))
       val s = new Schema.Parser().parse(schemaStr)
       intercept[AnalysisException] {
         new JdbcRecordWriter(ds, s, SaveMode.ErrorIfExists, H2Dialect)
@@ -110,11 +110,6 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
         Seq(rs.getInt(1), rs.getString(2)) shouldBe Seq(1, "alex")
       }
       writer.close()
-    }
-
-    it("calls the dialects upsert functionality") {
-      val writer = new JdbcRecordWriter(ds, schema, dialect = PostgresDialect, batchSize = 1, mode = SaveMode.Append)
-      writer.schemaFields shouldBe PostgresDialect.upsertFields(schema)
     }
 
     it("flushes") {

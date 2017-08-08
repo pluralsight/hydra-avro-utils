@@ -13,9 +13,8 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.avro.{AvroRuntimeException, Schema}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.util.{Failure, Success}
+import scala.util.control.NonFatal
 
 
 /**
@@ -59,37 +58,25 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
   private var rowCount = 0L
 
   private val tableObj: Table = {
-    val catalogTable = store.getTable(tableId).map { table =>
-      mode match {
-        case SaveMode.ErrorIfExists => throw new AnalysisException(s"Table $table already exists.")
-        case SaveMode.Overwrite => //todo: wipeout table
-          table
-        case _ => table
-      }
-    }.recover {
-      case _: NoSuchTableException =>
+    val tableExists = store.tableExists(tableId)
+    mode match {
+      case SaveMode.ErrorIfExists if tableExists => throw new AnalysisException(s"Table $table already exists.")
+      case SaveMode.Overwrite => //todo: truncate table
+        Table(tableName, schema, database)
+      case _ =>
         val table = Table(tableName, schema, database)
-        store.createTable(table)
+        store.createOrAlterTable(table)
         table
-      case e: Throwable => {
-        throw e
-      }
-    }
-
-    catalogTable match {
-      case Success(table) => table
-      case Failure(ex) => throw ex;
     }
   }
 
   private val pk = AvroUtils.getPrimaryKeys(schema)
-  private val name = tableObj.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(tableObj.name)
+
+  private val name = dbSyntax.format(tableObj.name)
+
   private val stmt = dialect.upsert(dbSyntax.format(name), schema, dbSyntax)
 
-  //public for testing
-  val schemaFields = if (pk.isEmpty) schema.getFields.asScala else dialect.upsertFields(schema)
-
-  private val valueSetter = new AvroValueSetter(schemaFields, dialect, dbSyntax)
+  private val valueSetter = new AvroValueSetter(schema, dialect)
 
   def write(record: GenericRecord): Unit = {
     if (!compatibilityChecker.isCompatible(schema, record.getSchema)) {
@@ -106,17 +93,41 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
 
   def flush(): Unit = synchronized {
     withConnection(dataSource.getConnection) { conn =>
+      val supportsTransactions = try {
+        conn.getMetaData().supportsDataManipulationTransactionsOnly() ||
+          conn.getMetaData().supportsDataDefinitionAndDataManipulationTransactions()
+
+      } catch {
+        case NonFatal(e) =>
+          JdbcRecordWriter.logger.warn("Exception while detecting transaction support", e)
+          true
+      }
+
+      var committed = false
+
+      if (supportsTransactions) {
+        conn.setAutoCommit(false) // Everything in the same db transaction.
+      }
       val pstmt = conn.prepareStatement(stmt)
       unflushedRecords.foreach { r =>
-        valueSetter.setValues(r, pstmt)
-        pstmt.addBatch()
+        valueSetter.bind(r, pstmt)
       }
       try {
         pstmt.executeBatch()
+        if (supportsTransactions) {
+          conn.commit()
+        }
+        committed = true
       }
       catch {
-        case e: BatchUpdateException => e.getNextException().printStackTrace(); throw e
+        case e: BatchUpdateException =>
+          JdbcRecordWriter.logger.error("Batch update error", e.getNextException()); throw e;
         case e: Exception => throw e
+      }
+      finally {
+        if (!committed && supportsTransactions) {
+          conn.rollback()
+        }
       }
       unflushedRecords.clear()
     }

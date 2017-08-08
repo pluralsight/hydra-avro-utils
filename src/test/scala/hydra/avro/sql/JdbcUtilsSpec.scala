@@ -168,11 +168,9 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
       val avro = new Schema.Parser().parse(schema)
 
       JdbcUtils.columns(avro, NoopDialect) shouldBe Seq(
-        Column("id", JdbcType("INTEGER", JDBCType.INTEGER), false, avro.getField("id").schema(), Some("doc")),
-        Column("username", JdbcType("TEXT", JDBCType.VARCHAR), true, avro.getField("username").schema(), None))
+        Column("id", avro.getField("id").schema(), JdbcType("INTEGER", JDBCType.INTEGER), false, Some("doc")),
+        Column("username", avro.getField("username").schema(), JdbcType("TEXT", JDBCType.VARCHAR), true, None))
     }
-
-
 
 
     it("returns CHAR for enums") {

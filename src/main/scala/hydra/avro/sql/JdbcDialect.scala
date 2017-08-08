@@ -119,8 +119,14 @@ abstract class JdbcDialect extends Serializable {
     }
   }
 
+  /*
+   * Optional operation; default implementation throws a UnsupportedOperationException
+    */
+  @throws[UnsupportedOperationException]
+  def alterTableQueries(tableName: String, missingFields: Seq[Field], dbs: DbSyntax): Seq[String] = {
+    throw new UnsupportedOperationException("Alter tables are not supported by this dialect.")
+  }
 }
-
 
 object JdbcDialects {
 

@@ -47,9 +47,9 @@ class JdbcCatalogSpec extends Matchers with FunSpecLike with BeforeAndAfterAll {
   val schema = new Schema.Parser().parse(schemaStr)
 
   override def beforeAll() = {
-    store.createTable(Table("test_table", schema))
+    store.createOrAlterTable(Table("test_table", schema))
     store.createSchema("test_schema") shouldBe true
-    store.createTable(Table("test_table", schema, Some("test_schema")))
+    store.createOrAlterTable(Table("test_table", schema, Some("test_schema")))
   }
 
   override def afterAll() = {
@@ -75,13 +75,13 @@ class JdbcCatalogSpec extends Matchers with FunSpecLike with BeforeAndAfterAll {
 
     it("errors if table exists") {
       intercept[UnableToCreateException] {
-        store.createTable(Table("test_table", schema, Some("test_schema")))
+        store.createOrAlterTable(Table("test_table", schema, Some("test_schema")))
       }
     }
 
     it("errors if it can't create a table in a different database") {
       intercept[UnableToCreateException] {
-        store.createTable(Table("test_table", schema, Some("x")))
+        store.createOrAlterTable(Table("test_table", schema, Some("x")))
       }
     }
 
@@ -93,13 +93,13 @@ class JdbcCatalogSpec extends Matchers with FunSpecLike with BeforeAndAfterAll {
     }
 
     it("gets existent tables") {
-      store.getTable(TableIdentifier("unknown")).isFailure shouldBe true
-      store.getTable(TableIdentifier("unknown")).isFailure shouldBe true
+      store.getTableMetadata(TableIdentifier("unknown")).isFailure shouldBe true
+      store.getTableMetadata(TableIdentifier("unknown")).isFailure shouldBe true
       intercept[NoSuchSchemaException] {
-        store.getTable(TableIdentifier("unknown", Some("unknown")))
+        store.getTableMetadata(TableIdentifier("unknown", Some("unknown")))
       }
-      store.getTable(TableIdentifier("test_table", Some("test_schema"))).get shouldBe Table("test_table",
-        Schema.create(Schema.Type.NULL), Some("test_schema"), None)
+      store.getTableMetadata(TableIdentifier("test_table", Some("test_schema"))).get shouldBe DbTable("test_table"
+        , Seq.empty, None)
     }
   }
 

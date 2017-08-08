@@ -145,7 +145,7 @@ private[avro] object JdbcUtils {
       val name = dbSyntax.format(field.name)
       val typ = getJdbcType(field.schema(), dialect)
       val nullable = isNullableUnion(field.schema())
-      field -> Column(name, typ, nullable, field.schema(), Option(field.doc()))
+      field -> Column(name, field.schema(), typ, nullable, Option(field.doc()))
     }
       .toMap
   }

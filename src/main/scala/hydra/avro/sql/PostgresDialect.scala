@@ -94,5 +94,13 @@ private[sql] object PostgresDialect extends JdbcDialect {
 
   override def isCascadingTruncateTable(): Option[Boolean] = Some(true)
 
+  override def alterTableQueries(table: String, missingFields: Seq[Field], dbs: DbSyntax): Seq[String] = {
+    missingFields.map { f =>
+      val dbDef = JdbcUtils.getJdbcType(f.schema, this).databaseTypeDefinition
+      val colName = quoteIdentifier(dbs.format(f.name))
+      s"alter table $table add column $colName $dbDef"
+    }
+  }
+
 }
 
