@@ -1,6 +1,6 @@
 package hydra.avro.sql
 
-import java.sql.{BatchUpdateException, PreparedStatement}
+import java.sql.BatchUpdateException
 
 import com.zaxxer.hikari.HikariDataSource
 import hydra.avro.io.SaveMode.SaveMode
@@ -105,7 +105,6 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
         conn.setAutoCommit(false) // Everything in the same db transaction.
       }
       val pstmt = conn.prepareStatement(stmt)
-      JdbcRecordWriter.logger.debug(pstmt.unwrap(classOf[PreparedStatement]).toString)
       records.foreach(valueSetter.bind(_, pstmt))
       try {
         pstmt.executeBatch()
