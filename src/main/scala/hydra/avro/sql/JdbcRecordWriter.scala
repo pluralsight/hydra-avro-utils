@@ -1,12 +1,11 @@
 package hydra.avro.sql
 
 import java.sql.{BatchUpdateException, PreparedStatement}
-import java.util.Objects
 
-import com.google.common.cache.{RemovalListener, RemovalNotification}
 import com.zaxxer.hikari.HikariDataSource
 import hydra.avro.io.SaveMode.SaveMode
 import hydra.avro.io.{RecordWriter, SaveMode}
+import hydra.avro.util.AvroUtils
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.slf4j.LoggerFactory
@@ -69,7 +68,7 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
   private val valueSetter = new AvroValueSetter(schema, dialect)
 
   def add(record: GenericRecord): Unit = {
-    if (Objects.equals(currentSchema, record.getSchema)) {
+    if (AvroUtils.areEqual(currentSchema, record.getSchema)) {
       records += record
       if (batchSize > 0 && records.size >= batchSize) flush()
     }
@@ -106,6 +105,7 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
         conn.setAutoCommit(false) // Everything in the same db transaction.
       }
       val pstmt = conn.prepareStatement(stmt)
+      JdbcRecordWriter.logger.debug(pstmt.unwrap(classOf[PreparedStatement]).toString)
       records.foreach(valueSetter.bind(_, pstmt))
       try {
         pstmt.executeBatch()
@@ -134,17 +134,6 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
 }
 
 object JdbcRecordWriter {
-  val logger = LoggerFactory.getLogger(getClass)
 
-  val removalListener = new RemovalListener[String, PreparedStatement] {
-    override def onRemoval(n: RemovalNotification[String, PreparedStatement]): Unit = {
-      logger.debug(s"Entry ${n.getKey} was removed. Closing and flushing prepared statement.")
-      try {
-        n.getValue.executeBatch()
-      }
-      finally {
-        n.getValue.close()
-      }
-    }
-  }
+  val logger = LoggerFactory.getLogger(getClass)
 }

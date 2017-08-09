@@ -102,5 +102,7 @@ private[sql] object PostgresDialect extends JdbcDialect {
     }
   }
 
+  override def tableNameForMetadataQuery(tableName: String): String = tableName.toLowerCase
+
 }
 

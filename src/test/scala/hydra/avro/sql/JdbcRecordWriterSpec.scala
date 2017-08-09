@@ -50,7 +50,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
   record.put("id", 1)
   record.put("username", "alex")
 
-  val catalog = new JdbcCatalog(ds, UnderscoreSyntax, PostgresDialect)
+  val catalog = new JdbcCatalog(ds, UnderscoreSyntax, H2Dialect)
 
   override def afterAll() = ds.close()
 
@@ -69,6 +69,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
           |		}
           |	]
           |}""".stripMargin
+
       catalog.createOrAlterTable(Table("tester", schema))
       val s = new Schema.Parser().parse(schemaStr)
       intercept[AnalysisException] {

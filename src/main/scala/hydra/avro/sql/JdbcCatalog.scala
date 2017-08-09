@@ -66,8 +66,10 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
           .get
       } else {
         Try(JdbcUtils.createTable(table.schema, dialect, name, "", dbSyntax, conn))
-          .flatMap(_ => alterIfNeeded(table, conn))
-          .recover { case e: SQLException => throw UnableToCreateException(e.getMessage) }
+          .map(_ => true)
+          .recover {
+            case e: SQLException => throw UnableToCreateException(e.getMessage)
+          }
           .get
       }
     }
@@ -76,7 +78,7 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
   private def alterIfNeeded(table: Table, connection: Connection): Try[Boolean] = {
     //todo: make this a config
     val autoEvolve = true
-    getTableMetadata(TableIdentifier(table.name)).flatMap { tableMetadata =>
+    getTableMetadata(TableIdentifier(table.name, None, table.dbSchema)).flatMap { tableMetadata =>
       val dbColumns = tableMetadata.columns
       findMissingFields(table.schema, dbColumns) match {
         case Nil =>
@@ -84,7 +86,8 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
         case fields =>
           val invalidFields = fields.find(f => JdbcUtils.isNullableUnion(f.schema()) && f.defaultVal() == null)
           invalidFields.foreach { f =>
-            throw new AvroRuntimeException(s"Cannot ALTER to add missing field ${f.name()}, as it is not optional and does not have a default value")
+            throw new AvroRuntimeException(s"Cannot ALTER to add missing field ${f.name()}, " +
+              s"as it is not optional and does not have a default value")
           }
           if (!autoEvolve) {
             throw new RuntimeException(s"Table ${table.name} is missing fields ${fields.map(_.name())} and auto-evolution is disabled")
