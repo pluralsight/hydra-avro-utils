@@ -101,7 +101,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
 
     it("writes") {
       val writer = new JdbcRecordWriter(ds, schema, dialect = H2Dialect, batchSize = 1)
-      writer.write(record)
+      writer.add(record)
       writer.flush()
       withConnection(ds.getConnection) { c =>
         val stmt = c.createStatement()
@@ -134,7 +134,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
 
 
       val writer = new JdbcRecordWriter(ds, new Schema.Parser().parse(schemaStr), batchSize = 2, dialect = H2Dialect)
-      writer.write(record)
+      writer.add(record)
 
       withConnection(ds.getConnection) { c =>
         val stmt = c.createStatement()
@@ -176,7 +176,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
 
 
       val writer = new JdbcRecordWriter(ds, new Schema.Parser().parse(schemaStr), batchSize = 2, dialect = H2Dialect)
-      writer.write(record)
+      writer.add(record)
 
       withConnection(ds.getConnection) { c =>
         val stmt = c.createStatement()

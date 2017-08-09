@@ -53,5 +53,39 @@ class H2DialectSpec extends Matchers with FunSpecLike {
       val upsert = "merge into table (\"id\",\"username\",\"active\") key(\"id\") values (?,?,?);"
       H2Dialect.upsert("table", avro, UnderscoreSyntax) shouldBe upsert
     }
+
+    it("Creates the correct alter table statements") {
+      import scala.collection.JavaConverters._
+      val schema = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      val expected = Seq(
+        """alter table test add column "id1" INTEGER""",
+        """alter table test add column "id2" INTEGER""",
+        """alter table test add column "username" TEXT""")
+
+      H2Dialect.alterTableQueries("test", schema.getFields().asScala, UnderscoreSyntax) shouldBe expected
+    }
   }
 }

@@ -117,6 +117,7 @@ private[avro] object JdbcUtils {
   def tableExists(conn: Connection, dialect: JdbcDialect, table: String): Boolean = {
     Try {
       val sql = dialect.getTableExistsQuery(table)
+      logger.info(sql)
       val statement = conn.prepareStatement(sql)
       try {
         statement.executeQuery()

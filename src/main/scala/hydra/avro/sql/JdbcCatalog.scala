@@ -45,15 +45,31 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
     }
   }
 
+  override def createTable(table: Table): Boolean = {
+    withConnection(ds.getConnection) { conn =>
+      validateName(table.name)
+      val name = table.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(table.name)
+      Try(JdbcUtils.createTable(table.schema, dialect, name, "", dbSyntax, conn)).map(_ => true)
+        .recover { case e: SQLException => throw UnableToCreateException(e.getMessage) }
+        .get
+    }
+  }
+
   override def createOrAlterTable(table: Table): Boolean = {
     withConnection(ds.getConnection) { conn =>
       validateName(table.name)
-      val tableExists = JdbcUtils.tableExists(conn, dialect, table.name)
-
-      Try(JdbcUtils.createTable(table.schema, dialect, table.name, "", dbSyntax, conn))
-        .flatMap(_ => alterIfNeeded(table, conn))
-        .recover { case e: SQLException => throw UnableToCreateException(e.getMessage) }
-        .get
+      val name = table.dbSchema.map(_ + ".").getOrElse("") + dbSyntax.format(table.name)
+      val tableExists = JdbcUtils.tableExists(conn, dialect, name)
+      if (tableExists) {
+        alterIfNeeded(table, conn)
+          .recover { case e: SQLException => throw UnableToCreateException(e.getMessage) }
+          .get
+      } else {
+        Try(JdbcUtils.createTable(table.schema, dialect, name, "", dbSyntax, conn))
+          .flatMap(_ => alterIfNeeded(table, conn))
+          .recover { case e: SQLException => throw UnableToCreateException(e.getMessage) }
+          .get
+      }
     }
   }
 
@@ -63,7 +79,8 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
     getTableMetadata(TableIdentifier(table.name)).flatMap { tableMetadata =>
       val dbColumns = tableMetadata.columns
       findMissingFields(table.schema, dbColumns) match {
-        case Nil => Success(false)
+        case Nil =>
+          Success(false)
         case fields =>
           val invalidFields = fields.find(f => JdbcUtils.isNullableUnion(f.schema()) && f.defaultVal() == null)
           invalidFields.foreach { f =>
@@ -74,7 +91,8 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
           }
 
           val alterQueries = dialect.alterTableQueries(table.name, fields, dbSyntax)
-          log.info("Amending table to add missing fields:{} maxRetries:{} with SQL: {}", fields, alterQueries)
+          log.info("Amending table to add missing fields:{} with SQL: {}",
+            fields.mkString(","), alterQueries.mkString(","), "")
           TryWith(connection.createStatement())(stmt => alterQueries.foreach(stmt.executeUpdate))
           Success(true)
       }
@@ -84,27 +102,31 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
   def findMissingFields(schema: Schema, columns: Seq[DbColumn]): Seq[Field] = {
     import scala.collection.JavaConverters._
     val fields = schema.getFields.asScala
-    val missing = fields.map(_.name()).diff(columns.map(_.name))
+    val cols = columns.map(_.name).toSet
+    val missing = fields.map(_.name()).filterNot(cols)
     missing.map(schema.getField)
   }
 
 
-  override def tableExists(name: TableIdentifier): Boolean = synchronized {
+  override def tableExists(tId: TableIdentifier): Boolean = synchronized {
     withConnection(ds.getConnection) { conn =>
-      val db = name.schema.map(d => formatDatabaseName(d) + ".")
-      val table = db.getOrElse("") + formatTableName(name.table)
-      JdbcUtils.tableExists(conn, dialect, table)
+      JdbcUtils.tableExists(conn, dialect, getTableName(tId))
     }
   }
 
 
+  private def getTableName(t: TableIdentifier): String = {
+    val db = t.schema.filterNot(_.isEmpty).map(d => formatDatabaseName(d) + ".")
+    db.getOrElse("") + formatTableName(t.table)
+  }
+
   override def getTableMetadata(tableId: TableIdentifier): Try[DbTable] = {
     withConnection(ds.getConnection) { conn =>
-      val table = formatTableName(tableId.table)
-      tableId.schema.foreach(requireSchemaExists(_, conn))
+      val table = getTableName(tableId)
+      tableId.schema.filterNot(_.isEmpty).foreach(requireSchemaExists(_, conn))
       val db = tableId.schema.getOrElse("")
       val exists = JdbcUtils.tableExists(conn, dialect, table)
-      if (exists) doGetTableMetadata(table, conn) else Failure(new NoSuchTableException(db, table))
+      if (exists) doGetTableMetadata(table, tableId.schema, conn) else Failure(new NoSuchTableException(db, table))
 
     }
   }
@@ -158,16 +180,16 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
           }
         }.get
       case s if s.toLowerCase.startsWith("postgres") => connection.getSchema
-      case _ => null //ok to return here, because that's how jdbc works
+      case _ => null
     }
   }
 
-  private def doGetTableMetadata(tableName: String, connection: Connection): Try[DbTable] = {
+  private def doGetTableMetadata(tableName: String, dbSchema: Option[String], connection: Connection): Try[DbTable] = {
     val dbMetaData = connection.getMetaData
     val product = dbMetaData.getDatabaseProductName
     val catalog = connection.getCatalog
-    val schema = getSchema(connection, product)
-    val tableNameForQuery = if (product.equalsIgnoreCase("oracle")) tableName.toUpperCase else tableName
+    val schema = dbSchema.map(_.toUpperCase) getOrElse getSchema(connection, product)
+    val tableNameForQuery = dialect.tableNameForMetadataQuery(tableName)
     JdbcCatalog.log.info("Querying column metadata for product:{} schema:{} catalog:{} table:{}",
       product, schema, catalog, tableNameForQuery)
 
@@ -178,14 +200,15 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
         def next() = rs.getString("COLUMN_NAME")
       }
 
-      rsIter.toSeq
+      rsIter.toList
     }.get
 
     val columns: Seq[DbColumn] = TryWith(dbMetaData.getColumns(catalog, schema, tableNameForQuery, null)) { rs =>
-      val rsIter = new Iterator[DbColumn] {
-        def hasNext = rs.next()
 
-        def next() = {
+      val rsIter = new Iterator[DbColumn] {
+        override def hasNext = rs.next()
+
+        override def next() = {
           val colName = rs.getString("COLUMN_NAME")
           val sqlType = rs.getInt("DATA_TYPE")
           val remarks = rs.getString("REMARKS")
@@ -196,13 +219,12 @@ class JdbcCatalog(ds: DataSource, dbSyntax: DbSyntax, dialect: JdbcDialect) exte
         }
       }
 
-      rsIter.toSeq
+      rsIter.toList
+
     }.get
 
     Success(DbTable(tableName, columns))
   }
-
-
 }
 
 object JdbcCatalog {

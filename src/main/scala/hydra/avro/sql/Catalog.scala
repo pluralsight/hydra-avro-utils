@@ -4,6 +4,8 @@ import scala.util.Try
 
 abstract class Catalog {
 
+  def createTable(table: Table):Boolean
+
   def createOrAlterTable(tableDesc: Table): Boolean
 
   def createSchema(schema: String): Boolean

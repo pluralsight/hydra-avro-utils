@@ -9,7 +9,7 @@ import org.apache.avro.Schema
   */
 case class Database(name: String, locationUri: String, description: Option[String])
 
-case class Table(name: String, schema: Schema, description: Option[String] = None)
+case class Table(name: String, schema: Schema, dbSchema: Option[String] = None, description: Option[String] = None)
 
 case class Column(name: String, schema: Schema, dataType: JdbcType, nullable: Boolean, description: Option[String])
 

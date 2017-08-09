@@ -8,6 +8,14 @@ import org.apache.avro.Schema.Field
   */
 abstract class JdbcDialect extends Serializable {
   /**
+    * The table name to be used when querying the resultset metadata API.
+    *
+    * @param tableName
+    * @return
+    */
+  def tableNameForMetadataQuery(tableName: String) = tableName.toUpperCase
+
+  /**
     * Check if this dialect instance can handle a certain jdbc url.
     *
     * @param url the jdbc url.
