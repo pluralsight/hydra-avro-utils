@@ -18,13 +18,23 @@ package hydra.avro.util
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Field
 
+import scala.collection.mutable
 
 /**
   * Created by alexsilva on 12/7/15.
   */
 object AvroUtils {
 
+  import scala.collection.JavaConverters._
+
   val pattern = "^(?!\\d|[a-zA-Z]|_)".r
+
+
+  private[avro] val SEEN_EQUALS = new ThreadLocal[mutable.Set[SeenPair]]() {
+    override protected def initialValue = new mutable.HashSet[SeenPair]()
+  }
+
+  private[avro] val NO_HASHCODE = Integer.MIN_VALUE
 
   /**
     * Valid fields in Avro need to start with a number, an underscore or a letter.  This function checks the
@@ -60,6 +70,40 @@ object AvroUtils {
       case None => Seq.empty
     }
   }
+
+  /**
+    * A "ligher" equals that looks a fields and names primarily.
+    * Similar to record schema.compare, but without taking properties into consideration, since
+    * we are using properties for primary keys.
+    *
+    * @param one
+    * @param other
+    */
+  def areEqual(one: Schema, other: Schema): Boolean = {
+    val seen = SEEN_EQUALS.get
+    val here = SeenPair(one.hashCode(), other.hashCode())
+    val equals = {
+      if (seen.contains(here)) return true
+      if (one eq other) return true
+      if (one.getFullName != other.getFullName) return false
+      one.getFields.asScala.map(_.name()).toSet == other.getFields.asScala.map(_.name()).toSet
+    }
+
+    if (equals)
+      seen.add(here)
+
+    equals
+  }
+
+  private[avro] case class SeenPair private(s1: Int, s2: Int) {
+    override def equals(o: Any): Boolean =
+      (this.s1 == o.asInstanceOf[SeenPair].s1) && (this.s2 == o.asInstanceOf[SeenPair].s2)
+
+    override def hashCode: Int = s1 + s2
+  }
+
 }
+
+
 
 

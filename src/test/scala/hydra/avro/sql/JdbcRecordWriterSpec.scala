@@ -50,7 +50,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
   record.put("id", 1)
   record.put("username", "alex")
 
-  val catalog = new JdbcCatalog(ds, UnderscoreSyntax, PostgresDialect)
+  val catalog = new JdbcCatalog(ds, UnderscoreSyntax, H2Dialect)
 
   override def afterAll() = ds.close()
 
@@ -69,7 +69,8 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
           |		}
           |	]
           |}""".stripMargin
-      catalog.createTable(Table("tester", schema))
+
+      catalog.createOrAlterTable(Table("tester", schema))
       val s = new Schema.Parser().parse(schemaStr)
       intercept[AnalysisException] {
         new JdbcRecordWriter(ds, s, SaveMode.ErrorIfExists, H2Dialect)
@@ -101,7 +102,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
 
     it("writes") {
       val writer = new JdbcRecordWriter(ds, schema, dialect = H2Dialect, batchSize = 1)
-      writer.write(record)
+      writer.add(record)
       writer.flush()
       withConnection(ds.getConnection) { c =>
         val stmt = c.createStatement()
@@ -110,11 +111,6 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
         Seq(rs.getInt(1), rs.getString(2)) shouldBe Seq(1, "alex")
       }
       writer.close()
-    }
-
-    it("calls the dialects upsert functionality") {
-      val writer = new JdbcRecordWriter(ds, schema, dialect = PostgresDialect, batchSize = 1, mode = SaveMode.Append)
-      writer.schemaFields shouldBe PostgresDialect.upsertFields(schema)
     }
 
     it("flushes") {
@@ -139,7 +135,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
 
 
       val writer = new JdbcRecordWriter(ds, new Schema.Parser().parse(schemaStr), batchSize = 2, dialect = H2Dialect)
-      writer.write(record)
+      writer.add(record)
 
       withConnection(ds.getConnection) { c =>
         val stmt = c.createStatement()
@@ -181,7 +177,7 @@ class JdbcRecordWriterSpec extends Matchers with FunSpecLike with BeforeAndAfter
 
 
       val writer = new JdbcRecordWriter(ds, new Schema.Parser().parse(schemaStr), batchSize = 2, dialect = H2Dialect)
-      writer.write(record)
+      writer.add(record)
 
       withConnection(ds.getConnection) { c =>
         val stmt = c.createStatement()

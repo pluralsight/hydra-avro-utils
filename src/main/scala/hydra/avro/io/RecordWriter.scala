@@ -1,7 +1,6 @@
 package hydra.avro.io
 
 import hydra.avro.io.SaveMode.SaveMode
-import io.confluent.kafka.schemaregistry.avro.AvroCompatibilityChecker
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 
@@ -19,7 +18,7 @@ trait RecordWriter {
     *
     * @param record
     */
-  def write(record: GenericRecord): Unit
+  def add(record: GenericRecord): Unit
 
   /**
     * Flushes any cache/record batch to the underlying store.
@@ -45,13 +44,4 @@ trait RecordWriter {
     */
   def mode: SaveMode
 
-  /**
-    * The compability level to check.  This determines if the schema of the record being passed
-    * in the write() function is compatible with the schema associated with this writer.
-    *
-    * Defaults to AvroCompatibilityChecker.NO_OP_CHECKER.
-    *
-    * See Confluent's Schema registry documentation for more information.
-    */
-  val compatibilityChecker: AvroCompatibilityChecker = AvroCompatibilityChecker.NO_OP_CHECKER
 }

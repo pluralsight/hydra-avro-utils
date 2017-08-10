@@ -1,10 +1,11 @@
 package hydra.avro.sql
 
+import java.sql.JDBCType
 import java.util.Properties
 
 import com.typesafe.config.ConfigFactory
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
-import org.apache.avro.Schema
+import org.apache.avro.{AvroRuntimeException, Schema}
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 
 /**
@@ -24,7 +25,7 @@ class JdbcCatalogSpec extends Matchers with FunSpecLike with BeforeAndAfterAll {
 
   private val ds = new HikariDataSource(hikariConfig)
 
-  val store = new JdbcCatalog(ds, NoOpSyntax, NoopDialect)
+  val store = new JdbcCatalog(ds, NoOpSyntax, H2Dialect)
 
   val schemaStr =
     """
@@ -47,9 +48,9 @@ class JdbcCatalogSpec extends Matchers with FunSpecLike with BeforeAndAfterAll {
   val schema = new Schema.Parser().parse(schemaStr)
 
   override def beforeAll() = {
-    store.createTable(Table("test_table", schema))
+    store.createOrAlterTable(Table("test_table", schema))
     store.createSchema("test_schema") shouldBe true
-    store.createTable(Table("test_table", schema, Some("test_schema")))
+    store.createOrAlterTable(Table("test_table", schema, dbSchema = Some("test_schema")))
   }
 
   override def afterAll() = {
@@ -69,8 +70,8 @@ class JdbcCatalogSpec extends Matchers with FunSpecLike with BeforeAndAfterAll {
     }
 
     it("checks if a table with a schema exists") {
-      store.tableExists(TableIdentifier("test_table", Some("test_schema"))) shouldBe true
-      store.tableExists(TableIdentifier("table", Some("unknown"))) shouldBe false
+      store.tableExists(TableIdentifier("test_table", None, Some("test_schema"))) shouldBe true
+      store.tableExists(TableIdentifier("table", None, Some("unknown"))) shouldBe false
     }
 
     it("errors if table exists") {
@@ -81,7 +82,7 @@ class JdbcCatalogSpec extends Matchers with FunSpecLike with BeforeAndAfterAll {
 
     it("errors if it can't create a table in a different database") {
       intercept[UnableToCreateException] {
-        store.createTable(Table("test_table", schema, Some("x")))
+        store.createOrAlterTable(Table("test_table", schema, Some("x")))
       }
     }
 
@@ -92,14 +93,78 @@ class JdbcCatalogSpec extends Matchers with FunSpecLike with BeforeAndAfterAll {
       }
     }
 
-    it("gets existent tables") {
-      store.getTable(TableIdentifier("unknown")).isFailure shouldBe true
-      store.getTable(TableIdentifier("unknown")).isFailure shouldBe true
+    it("gets existing tables") {
+      store.getTableMetadata(TableIdentifier("unknown")).isFailure shouldBe true
+      store.getTableMetadata(TableIdentifier("unknown")).isFailure shouldBe true
       intercept[NoSuchSchemaException] {
-        store.getTable(TableIdentifier("unknown", Some("unknown")))
+        store.getTableMetadata(TableIdentifier("unknown", None, Some("unknown")))
       }
-      store.getTable(TableIdentifier("test_table", Some("test_schema"))).get shouldBe Table("test_table",
-        Schema.create(Schema.Type.NULL), Some("test_schema"), None)
+      val cols = List(DbColumn("id", JDBCType.INTEGER, false, Some("")),
+        DbColumn("username", JDBCType.CLOB, true, Some("")))
+      store.getTableMetadata(TableIdentifier("test_table", None, Some(""))).get shouldBe DbTable("test_table"
+        , cols, None)
+    }
+
+
+    it("throws exception when trying to alter a table adding an optional field with no default value") {
+      val newSchema = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		},
+          |  {
+          |			"name": "optional",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      intercept[AvroRuntimeException] {
+        store.createOrAlterTable(Table("test_table", newSchema))
+      }
+    }
+
+    it("alters a table") {
+      val newSchema = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		},
+          |  {
+          |			"name": "optional",
+          |			"type": ["null", "string"],
+          |     "default":"test"
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      val dbTable = store.createOrAlterTable(Table("test_table", newSchema))
+
+      val cols = List(
+        DbColumn("id", JDBCType.INTEGER, false, Some("")),
+        DbColumn("username", JDBCType.CLOB, true, Some("")),
+        DbColumn("optional", JDBCType.CLOB, true, Some("")))
+      store.getTableMetadata(TableIdentifier("test_table", None, Some(""))).get shouldBe DbTable("test_table", cols, None)
     }
   }
 

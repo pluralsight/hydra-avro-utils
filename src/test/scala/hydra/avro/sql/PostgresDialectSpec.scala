@@ -309,5 +309,39 @@ class PostgresDialectSpec extends Matchers with FunSpecLike {
       PostgresDialect.upsertFields(avro) shouldBe Seq(avro.getField("id1"), avro.getField("id2"),
         avro.getField("username"), avro.getField("username"), avro.getField("id1"), avro.getField("id2"))
     }
+
+    it("Creates the correct alter table statements") {
+      import scala.collection.JavaConverters._
+      val schema = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      val expected = Seq(
+        """alter table test add column "id1" INTEGER""",
+        """alter table test add column "id2" INTEGER""",
+        """alter table test add column "username" TEXT""")
+
+      PostgresDialect.alterTableQueries("test", schema.getFields().asScala, UnderscoreSyntax) shouldBe expected
+    }
   }
 }

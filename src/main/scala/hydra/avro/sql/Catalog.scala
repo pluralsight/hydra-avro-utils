@@ -4,7 +4,9 @@ import scala.util.Try
 
 abstract class Catalog {
 
-  def createTable(tableDesc: Table): Boolean
+  def createTable(table: Table):Boolean
+
+  def createOrAlterTable(tableDesc: Table): Boolean
 
   def createSchema(schema: String): Boolean
 
@@ -12,6 +14,6 @@ abstract class Catalog {
 
   def schemaExists(schema: String): Boolean
 
-  def getTable(tableIdentifier: TableIdentifier): Try[Table]
+  def getTableMetadata(tableIdentifier: TableIdentifier): Try[DbTable]
 
 }

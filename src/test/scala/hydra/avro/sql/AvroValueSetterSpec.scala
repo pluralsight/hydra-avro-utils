@@ -13,6 +13,7 @@ import org.scalamock.scalatest.MockFactory
 import org.scalatest.{FunSpecLike, Matchers}
 import scala.collection.JavaConverters._
 
+
 /**
   * Created by alexsilva on 5/4/17.
   */
@@ -25,8 +26,7 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       |	"namespace": "hydra",
       |	"fields": [{
       |			"name": "id",
-      |			"type": "int",
-      |     "meta":"primary-key"
+      |			"type": "int"
       |		},
       |		{
       |			"name": "username",
@@ -112,7 +112,7 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
 
   val schema = new Schema.Parser().parse(schemaStr)
 
-  val valueSetter = new AvroValueSetter(schema.getFields().asScala, PostgresDialect, UnderscoreSyntax)
+  val valueSetter = new AvroValueSetter(schema, PostgresDialect)
   describe("The AvroValueSetter") {
     it("sets values in inserts") {
       val ts = System.currentTimeMillis
@@ -141,6 +141,7 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       (mockedStmt.setString _).expects(13, """{"street": "happy drive"}""")
       (mockedStmt.setLong _).expects(14, 12342134223L)
       (mockedStmt.setBytes _).expects(15, *) //todo: how to verify the contents of an array in scala mock?
+      (mockedStmt.addBatch _).expects()
 
       val record = new GenericData.Record(schema)
       record.put("id", 1)
@@ -160,7 +161,41 @@ class ValueSetterSpec extends Matchers with FunSpecLike with MockFactory {
       record.put("address", address)
       record.put("bigNumber", 12342134223L)
       record.put("byteField", ByteBuffer.wrap("test".getBytes))
-      valueSetter.setValues(record, mockedStmt)
+      valueSetter.bind(record, mockedStmt)
+    }
+
+    it("gets insert fields from the dialect") {
+      val binder = new AvroValueSetter(schema, PostgresDialect)
+      binder.fieldTypes shouldBe schema.getFields.asScala
+        .map(f => f -> JdbcUtils.getJdbcType(f.schema(), PostgresDialect)).toMap
+
+    }
+
+    it("gets upsert fields from the dialect") {
+      val schemaStr =
+        """
+          |{
+          |	"type": "record",
+          |	"name": "FlushTest",
+          |	"namespace": "hydra",
+          | "key":"id",
+          |	"fields": [{
+          |			"name": "id",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin
+
+      val sch = new Schema.Parser().parse(schemaStr)
+      val binder = new AvroValueSetter(sch, PostgresDialect)
+      binder.fieldTypes shouldBe PostgresDialect.upsertFields(sch)
+        .map(f => f -> JdbcUtils.getJdbcType(f.schema(), PostgresDialect)).toMap
+
     }
   }
 

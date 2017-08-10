@@ -1,5 +1,6 @@
 package hydra.avro.util
 
+import hydra.avro.util.AvroUtils.SeenPair
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Field
 import org.scalatest.{FunSpecLike, Matchers}
@@ -151,6 +152,221 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
       val avro = new Schema.Parser().parse(schema)
 
       AvroUtils.getPrimaryKeys(avro) shouldBe Seq(avro.getField("id1"), avro.getField("id2"))
+
+    }
+
+    it("tests for equality ignoring props") {
+      val schema1 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      val schema2 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin)
+
+
+      AvroUtils.areEqual(schema1, schema2) shouldBe true
+    }
+
+    it("returns false for schemas with different names") {
+      val schema1 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra1",
+          | "key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      val schema2 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |		{
+          |			"name": "username",
+          |			"type": ["null", "string"]
+          |		}
+          |	]
+          |}""".stripMargin)
+
+
+      AvroUtils.areEqual(schema1, schema2) shouldBe false
+
+    }
+
+    it("returns false for schemas with same fields but different doc tags") {
+
+      val schema1 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int"
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      val schema2 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		}
+          |	]
+          |}""".stripMargin)
+
+
+      AvroUtils.areEqual(schema1, schema2) shouldBe true
+
+    }
+
+    it("returns false for schemas with different fields") {
+      val schema1 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		},
+          |  {
+          |			"name": "id2",
+          |			"type": "int"
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      val schema2 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		}
+          |	]
+          |}""".stripMargin)
+
+
+      AvroUtils.areEqual(schema1, schema2) shouldBe false
+
+    }
+
+    it("uses the equals cache") {
+      val schema1 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int"
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      val schema2 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      AvroUtils.areEqual(schema1, schema2) shouldBe true
+      AvroUtils.SEEN_EQUALS.get().contains(SeenPair(schema1.hashCode(), schema2.hashCode())) shouldBe true
+
+      AvroUtils.areEqual(schema1, schema2) shouldBe true
 
     }
   }

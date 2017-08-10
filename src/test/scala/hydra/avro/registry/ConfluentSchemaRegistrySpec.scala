@@ -15,41 +15,77 @@
 
 package hydra.avro.registry
 
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.ConfigFactory
 import io.confluent.kafka.schemaregistry.client.{CachedSchemaRegistryClient, MockSchemaRegistryClient}
-import org.scalatest.{FunSpecLike, Matchers}
+import org.apache.avro.Schema
+import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 
 /**
   * Created by alexsilva on 9/16/16.
   */
-class ConfluentSchemaRegistrySpec extends Matchers with FunSpecLike {
+class ConfluentSchemaRegistrySpec extends Matchers with FunSpecLike with BeforeAndAfterAll with ScalaFutures {
+
+  private var id = 0
+
+  val schema = new Schema.Parser().parse(
+    """
+      |{
+      |	"type": "record",
+      |	"name": "Tester",
+      |	"namespace": "hydra",
+      |	"fields": [{
+      |			"name": "id",
+      |			"type": "int"
+      |		}
+      |	]
+      |}""".stripMargin)
+
+
+  override def beforeAll(): Unit = {
+    id = ConfluentSchemaRegistry.mockRegistry.register(schema.getFullName, schema)
+  }
 
   describe("When creating a schema registry client") {
     it("returns a mock") {
-      val c = new ConfluentSchemaRegistry {
-        override lazy val config: Config = ConfigFactory.parseString("schema.registry.url=mock")
-      }
+      val c = ConfluentSchemaRegistry.forConfig(ConfigFactory.parseString("schema.registry.url=mock"))
       c.registryClient shouldBe a[MockSchemaRegistryClient]
       c.registryUrl shouldBe "mock"
+    }
+
+    it("uses a config path") {
+      val c = ConfluentSchemaRegistry
+        .forConfig("hydra", ConfigFactory.parseString("hydra.schema.registry.url=\"http://localhost:9092\""))
+      c.registryUrl shouldBe "http://localhost:9092"
+    }
+
+    it("returns all subjects") {
+      implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
+      val c = ConfluentSchemaRegistry.forConfig(ConfigFactory.parseString("schema.registry.url=mock"))
+      whenReady(c.getAllSubjects) { r => r shouldBe Seq(schema.getFullName) }
+    }
+
+    it("returns by id") {
+      implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
+      val c = ConfluentSchemaRegistry.forConfig(ConfigFactory.parseString("schema.registry.url=mock"))
+      whenReady(c.getById(id, "")) { r =>
+        r.getId shouldBe id
+        r.getVersion shouldBe 1
+        new Schema.Parser().parse(r.getSchema) shouldBe schema
+      }
     }
 
     it("throws an error if no config key is found") {
       val config = ConfigFactory.empty
       intercept[IllegalArgumentException] {
-        ConfluentSchemaRegistry.fromConfig(config)
+        ConfluentSchemaRegistry.forConfig("", config)
       }
     }
 
     it("returns a cached client when using a url") {
       val config = ConfigFactory.parseString("schema.registry.url=\"http://localhost:9092\"")
-      ConfluentSchemaRegistry.fromConfig(config) shouldBe a[CachedSchemaRegistryClient]
+      ConfluentSchemaRegistry.forConfig("", config).registryClient shouldBe a[CachedSchemaRegistryClient]
       ConfluentSchemaRegistry.registryUrl(config) shouldBe "http://localhost:9092"
-    }
-
-    it("can be wrapped") {
-      val c = new ConfluentSchemaRegistryWrapper(ConfigFactory.parseString("schema.registry.url=mock"))
-      c.registryClient shouldBe a[MockSchemaRegistryClient]
-      c.registryUrl shouldBe "mock"
     }
   }
 

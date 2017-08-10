@@ -8,6 +8,14 @@ import org.apache.avro.Schema.Field
   */
 abstract class JdbcDialect extends Serializable {
   /**
+    * The table name to be used when querying the resultset metadata API.
+    *
+    * @param tableName
+    * @return
+    */
+  def tableNameForMetadataQuery(tableName: String) = tableName.toUpperCase
+
+  /**
     * Check if this dialect instance can handle a certain jdbc url.
     *
     * @param url the jdbc url.
@@ -119,8 +127,14 @@ abstract class JdbcDialect extends Serializable {
     }
   }
 
+  /*
+   * Optional operation; default implementation throws a UnsupportedOperationException
+    */
+  @throws[UnsupportedOperationException]
+  def alterTableQueries(tableName: String, missingFields: Seq[Field], dbs: DbSyntax): Seq[String] = {
+    throw new UnsupportedOperationException("Alter tables are not supported by this dialect.")
+  }
 }
-
 
 object JdbcDialects {
 

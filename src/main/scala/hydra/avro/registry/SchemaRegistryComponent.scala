@@ -8,4 +8,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient
 trait SchemaRegistryComponent {
 
   def registryClient: SchemaRegistryClient
+
+  def registryUrl:String
 }

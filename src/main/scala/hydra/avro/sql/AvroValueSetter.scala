@@ -7,35 +7,46 @@ import java.sql.{PreparedStatement, Timestamp}
 import java.time.{LocalDate, ZoneId}
 
 import com.google.common.collect.Lists
-import hydra.avro.sql.JdbcUtils.isLogicalType
+import hydra.avro.sql.JdbcUtils.{getJdbcType, isLogicalType}
+import hydra.avro.util.AvroUtils
 import org.apache.avro.LogicalTypes.Decimal
 import org.apache.avro.Schema.Field
 import org.apache.avro.Schema.Type.LONG
 import org.apache.avro.generic.{GenericData, GenericRecord}
 import org.apache.avro.{AvroRuntimeException, LogicalTypes, Schema}
+import scala.collection.JavaConverters._
 
 /**
   * Created by alexsilva on 7/12/17.
   */
 //scalastyle:off
-private[sql] class AvroValueSetter(fields: Seq[Field], dialect: JdbcDialect, dbSyntax: DbSyntax) {
+private[sql] class AvroValueSetter(schema: Schema, dialect: JdbcDialect) {
 
-  val columns = JdbcUtils.columnMap(fields, dialect, dbSyntax)
+  private val pk = AvroUtils.getPrimaryKeys(schema)
 
-  def setValues(record: GenericRecord, stmt: PreparedStatement) = {
+  private val fields = if (pk.isEmpty) schema.getFields.asScala else dialect.upsertFields(schema)
+
+  val fieldTypes: Map[Field, JdbcType] = fields.map { field =>
+    field -> getJdbcType(field.schema(), dialect)
+  }.toMap
+
+  def bind(record: GenericRecord, stmt: PreparedStatement) = {
     fields.zipWithIndex.foreach {
       case (f, idx) =>
-        setFieldValue(record.get(f.name()), columns(f), f.schema(), stmt, idx + 1)
+        setFieldValue(record.get(f.name()), fieldTypes(f), f.schema(), stmt, idx + 1)
     }
+
+    stmt.addBatch()
   }
 
-  private def setFieldValue(value: AnyRef, col: Column, schema: Schema, pstmt: PreparedStatement, idx: Int): Unit = {
+  private def setFieldValue(value: AnyRef, jdbcType: JdbcType,
+                            schema: Schema, pstmt: PreparedStatement, idx: Int): Unit = {
     if (value == null) {
-      pstmt.setNull(idx, col.dataType.targetSqlType.getVendorTypeNumber.intValue())
+      pstmt.setNull(idx, jdbcType.targetSqlType.getVendorTypeNumber.intValue())
     } else {
       schema.getType match {
-        case Schema.Type.UNION => unionValue(value, col, schema, pstmt, idx)
-        case Schema.Type.ARRAY => arrayValue(value.asInstanceOf[GenericData.Array[AnyRef]], col, schema, pstmt, idx)
+        case Schema.Type.UNION => unionValue(value, jdbcType, schema, pstmt, idx)
+        case Schema.Type.ARRAY => arrayValue(value.asInstanceOf[GenericData.Array[AnyRef]], schema, pstmt, idx)
         case Schema.Type.STRING =>
           pstmt.setString(idx, if (value == "null" || value.toString == "null") null else value.toString)
         case Schema.Type.BOOLEAN =>
@@ -56,7 +67,7 @@ private[sql] class AvroValueSetter(fields: Seq[Field], dialect: JdbcDialect, dbS
         case Schema.Type.ENUM => pstmt.setString(idx, value.toString)
         case Schema.Type.RECORD => pstmt.setString(idx, value.toString)
         case Schema.Type.NULL =>
-          pstmt.setNull(idx, col.dataType.targetSqlType.getVendorTypeNumber.intValue())
+          pstmt.setNull(idx, jdbcType.targetSqlType.getVendorTypeNumber.intValue())
         case _ => throw new IllegalArgumentException(s"Type ${schema.getType} is not supported.")
       }
     }
@@ -74,25 +85,22 @@ private[sql] class AvroValueSetter(fields: Seq[Field], dialect: JdbcDialect, dbS
     }
   }
 
-  private def arrayValue(obj: GenericData.Array[AnyRef], col: Column, schema: Schema,
-                         pstmt: PreparedStatement, idx: Int): Unit = {
-
+  private def arrayValue(obj: GenericData.Array[AnyRef], schema: Schema, pstmt: PreparedStatement, idx: Int): Unit = {
     val aType = JdbcUtils.getJdbcType(schema.getElementType, dialect)
     val values = Lists.newArrayList(obj.iterator()).toArray
     val arr = pstmt.getConnection.createArrayOf(aType.targetSqlType.getName, values)
     pstmt.setArray(idx, arr)
   }
 
-  private def unionValue(obj: AnyRef, col: Column, schema: Schema, pstmt: PreparedStatement, idx: Int): Unit = {
+  private def unionValue(obj: AnyRef, jdbcType: JdbcType, schema: Schema, pstmt: PreparedStatement, idx: Int): Unit = {
     val types = schema.getTypes
 
     if (!JdbcUtils.isNullableUnion(schema)) {
       throw new AvroRuntimeException("Unions may only consist of a concrete type and null in hydra avro.")
     }
     if (types.size == 1) {
-      setFieldValue(obj, col, types.get(0), pstmt, idx)
+      setFieldValue(obj, jdbcType, types.get(0), pstmt, idx)
     }
-    else setFieldValue(obj, col, JdbcUtils.getNonNullableUnionType(schema), pstmt, idx)
-
+    else setFieldValue(obj, jdbcType, JdbcUtils.getNonNullableUnionType(schema), pstmt, idx)
   }
 }
