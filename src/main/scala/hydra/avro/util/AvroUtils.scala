@@ -89,7 +89,8 @@ object AvroUtils {
       one.getFields.asScala.map(_.name()).toSet == other.getFields.asScala.map(_.name()).toSet
     }
 
-    if (equals) seen.add(here)
+    if (equals)
+      seen.add(here)
 
     equals
   }
@@ -98,7 +99,7 @@ object AvroUtils {
     override def equals(o: Any): Boolean =
       (this.s1 == o.asInstanceOf[SeenPair].s1) && (this.s2 == o.asInstanceOf[SeenPair].s2)
 
-    override def hashCode: Int = System.identityHashCode(s1) + System.identityHashCode(s2)
+    override def hashCode: Int = s1 + s2
   }
 
 }

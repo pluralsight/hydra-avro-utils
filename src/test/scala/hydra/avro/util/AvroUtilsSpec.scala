@@ -1,5 +1,6 @@
 package hydra.avro.util
 
+import hydra.avro.util.AvroUtils.SeenPair
 import org.apache.avro.Schema
 import org.apache.avro.Schema.Field
 import org.scalatest.{FunSpecLike, Matchers}
@@ -330,6 +331,42 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
 
 
       AvroUtils.areEqual(schema1, schema2) shouldBe false
+
+    }
+
+    it("uses the equals cache") {
+      val schema1 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          | "key":"id1,id2",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int"
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      val schema2 = new Schema.Parser().parse(
+        """
+          |{
+          |	"type": "record",
+          |	"name": "User",
+          |	"namespace": "hydra",
+          |	"fields": [{
+          |			"name": "id1",
+          |			"type": "int",
+          |			"doc": "doc"
+          |		}
+          |	]
+          |}""".stripMargin)
+
+      AvroUtils.areEqual(schema1, schema2) shouldBe true
+      AvroUtils.SEEN_EQUALS.get().contains(SeenPair(schema1.hashCode(), schema2.hashCode())) shouldBe true
+
+      AvroUtils.areEqual(schema1, schema2) shouldBe true
 
     }
   }

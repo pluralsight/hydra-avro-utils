@@ -115,7 +115,7 @@ class JdbcRecordWriter(val dataSource: HikariDataSource,
       }
       catch {
         case e: BatchUpdateException =>
-          JdbcRecordWriter.logger.error("Batch update error", e.getNextException()); throw e;
+          JdbcRecordWriter.logger.error("Batch update error", e.getNextException()); throw e
         case e: Exception => throw e
       }
       finally {
