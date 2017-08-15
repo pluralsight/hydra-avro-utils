@@ -103,7 +103,7 @@ class AggregatedDialectSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id",
+          | "hydra.key": "id",
           |
           |	"fields": [{
           |			"name": "id",

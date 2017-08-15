@@ -290,7 +290,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id",
+          | "hydra.key":"id",
           |	"fields": [
           | {
           |			"name": "id",
@@ -325,7 +325,7 @@ class JdbcUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id1,id2",
+          | "hydra.key":"id1,id2",
           |	"fields": [
           | {
           |			"name": "id1",

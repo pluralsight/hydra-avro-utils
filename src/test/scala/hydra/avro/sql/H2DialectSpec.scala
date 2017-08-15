@@ -15,7 +15,7 @@ class H2DialectSpec extends Matchers with FunSpecLike {
       |	"type": "record",
       |	"name": "User",
       |	"namespace": "hydra",
-      | "key":"id",
+      | "hydra.key": "id",
       |	"fields": [{
       |			"name": "id",
       |			"type": "int"
@@ -62,7 +62,7 @@ class H2DialectSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id1,id2",
+          | "hydra.key": "id1,id2",
           |	"fields": [{
           |			"name": "id1",
           |			"type": "int",

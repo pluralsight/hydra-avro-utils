@@ -117,7 +117,7 @@ abstract class JdbcDialect extends Serializable {
     * It will add a "keys" property to the schema if the ids passed are not empty.
     */
   def upsert(table: String, schema: Schema, dbs: DbSyntax): String = {
-    Option(schema.getProp("key")).map(_ => buildUpsert(table, schema, dbs))
+    Option(schema.getProp("hydra.key")).map(_ => buildUpsert(table, schema, dbs))
       .getOrElse(insertStatement(table, schema, dbs))
   }
 

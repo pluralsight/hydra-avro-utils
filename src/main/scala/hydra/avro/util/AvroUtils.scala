@@ -65,7 +65,7 @@ object AvroUtils {
     * @return An empty sequence if no primary key(s) are defined.
     */
   def getPrimaryKeys(schema: Schema): Seq[Field] = {
-    Option(schema.getProp("key")).map(_.split(",")) match {
+    Option(schema.getProp("hydra.key")).map(_.split(",")) match {
       case Some(ids) => ids.map(getField(_, schema))
       case None => Seq.empty
     }
@@ -89,8 +89,7 @@ object AvroUtils {
       one.getFields.asScala.map(_.name()).toSet == other.getFields.asScala.map(_.name()).toSet
     }
 
-    if (equals)
-      seen.add(here)
+    if (equals) seen.add(here)
 
     equals
   }

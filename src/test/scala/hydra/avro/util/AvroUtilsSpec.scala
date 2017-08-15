@@ -55,7 +55,7 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"name",
+          | "hydra.key": "name",
           |	"fields": [{
           |			"name": "id",
           |			"type": "int",
@@ -82,7 +82,7 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id",
+          | "hydra.key": "id",
           |	"fields": [{
           |			"name": "id",
           |			"type": "int",
@@ -131,7 +131,7 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id1,id2",
+          | "hydra.key": "id1,id2",
           |	"fields": [{
           |			"name": "id1",
           |			"type": "int",
@@ -162,7 +162,7 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id1,id2",
+          | "hydra.key": "id1,id2",
           |	"fields": [{
           |			"name": "id1",
           |			"type": "int",
@@ -214,7 +214,7 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra1",
-          | "key":"id1,id2",
+          | "hydra.key": "id1,id2",
           |	"fields": [{
           |			"name": "id1",
           |			"type": "int",
@@ -268,7 +268,7 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id1,id2",
+          | "hydra.key": "id1,id2",
           |	"fields": [{
           |			"name": "id1",
           |			"type": "int"
@@ -302,7 +302,7 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id1,id2",
+          | "hydra.key": "id1,id2",
           |	"fields": [{
           |			"name": "id1",
           |			"type": "int",
@@ -341,7 +341,7 @@ class AvroUtilsSpec extends Matchers with FunSpecLike {
           |	"type": "record",
           |	"name": "User",
           |	"namespace": "hydra",
-          | "key":"id1,id2",
+          | "hydra.key": "id1,id2",
           |	"fields": [{
           |			"name": "id1",
           |			"type": "int"
