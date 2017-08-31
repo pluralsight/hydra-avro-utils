@@ -16,6 +16,7 @@ lazy val defaultSettings = Seq(
   excludeDependencies += "org.slf4j" % "slf4j-log4j12",
   excludeDependencies += "log4j" % "log4j",
   logLevel := Level.Info,
+  crossScalaVersions := Seq("2.11.8", "2.12.2"),
   scalacOptions ++= Seq("-encoding", "UTF-8", "-feature", "-language:_", "-deprecation", "-unchecked"),
   javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", JDK, "-target", JDK,
     "-Xlint:unchecked", "-Xlint:deprecation", "-Xlint:-options"),
